@@ -41,6 +41,7 @@
   #smeltbar i { display: block; height: 100%; width: 0; background: #fff; }
   #burnbar { height: 5px; margin-top: 6px; } #burnbar i { display: block; height: 100%; width: 0; background: #f08020; }
   .note { white-space: normal; line-height: 1.6; margin-top: 8px; padding-top: 6px; border-top: 1px solid #999; max-width: 230px; }
+  #sleep { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #000b; color: #fff; font-size: 18px; text-align: center; line-height: 2; z-index: 4; }
   #recipes h2 { margin: 0 0 6px; font-size: 12px; }
   .rc { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; white-space: nowrap; }
   .rg { display: grid; gap: 1px; background: #8b8b8b; padding: 1px; }
@@ -104,6 +105,7 @@ Enter チャット / 作業台・かまどは右クリックで開く
 <div id="names"></div>
 <div id="hurt"></div>
 <div id="toast"></div>
+<div id="sleep">就寝中……<br>全員がベッドに入ると朝になる（何かキーを押すと起きる）</div>
 <div id="stats"><div id="hearts"></div><div id="meats"></div></div>
 <div id="chat"><div id="chatlog"></div><input id="chatin" maxlength="100" placeholder="メッセージを入力して Enter"></div>
 <div id="hotbar"></div>
@@ -143,10 +145,13 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   BEDROCK = 9, ICE = 10, CACTUS = 11, SNOWGRASS = 12, PINELEAF = 13, SANDSTONE = 14,
   COBBLE = 15, PLANKS = 16, TABLE = 17, COAL_ORE = 18, IRON_ORE = 19,
   GOLD_ORE = 20, DIAMOND_ORE = 21, FURNACE = 22, FARMLAND = 23,
-  TALLGRASS = 24, WHEAT0 = 25, WHEAT1 = 26, WHEAT2 = 27, WHEAT3 = 28;   // 24〜28 は植物（すり抜ける・四角くない）
+  TALLGRASS = 24, WHEAT0 = 25, WHEAT1 = 26, WHEAT2 = 27, WHEAT3 = 28,
+  WOOL = 34, BED = 35, IRON_BLOCK = 36, GOLD_BLOCK = 37, DIAMOND_BLOCK = 38, COAL_BLOCK = 39, STONE_BRICK = 40,
+  GLASS = 41, CLAY = 42, BRICK = 43, SAPLING = 44;   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
-  RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126;
+  RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
+  CLOCK = 130, SHEARS = 131, BUCKET = 132, WATER_BUCKET = 133, APPLE = 134, GOLDEN_APPLE = 135, SHIELD = 136;   // 防具は 300 番台
 // ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
@@ -175,7 +180,7 @@ HARD[LOG] = 2.0; HARD[SANDSTONE] = 2.5; HARD[STONE] = 3.0; HARD[BEDROCK] = Infin
 HARD[COBBLE] = 3.0; HARD[PLANKS] = 2.0; HARD[TABLE] = 2.5; HARD[COAL_ORE] = 4.0; HARD[IRON_ORE] = 4.5;
 HARD[GOLD_ORE] = 4.5; HARD[DIAMOND_ORE] = 5.0; HARD[FURNACE] = 3.5; HARD[FARMLAND] = 0.8;
 for (let b = TALLGRASS; b <= WHEAT3; b++) HARD[b] = 0.05;
-const isPlant = b => b >= TALLGRASS && b <= WHEAT3;
+const isPlant = b => (b >= TALLGRASS && b <= WHEAT3) || b === SAPLING;
 Object.assign(NAME, { [COBBLE]: '丸石', [PLANKS]: '板材', [TABLE]: '作業台', [COAL_ORE]: '石炭鉱石', [IRON_ORE]: '鉄鉱石',
   [GOLD_ORE]: '金鉱石', [DIAMOND_ORE]: 'ダイヤ鉱石', [FURNACE]: 'かまど', [FARMLAND]: '耕した土', [TALLGRASS]: '草',
   [WHEAT0]: '小麦', [WHEAT1]: '小麦', [WHEAT2]: '小麦', [WHEAT3]: '小麦（収穫できる）',
@@ -221,7 +226,7 @@ for (let b = TORCH; b <= TORCH + 4; b++) { HARD[b] = 0.05; NAME[b] = '松明'; C
 NAME[CHARCOAL] = '木炭';
 SMELT[LOG] = CHARCOAL;   // 原木を焼くと木炭
 FUEL[CHARCOAL] = 8;      // 燃料としては石炭と同じ
-const isSprite = b => b >= 100 || b === TORCH;   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
+const isSprite = b => b >= 100 || b === TORCH || b === SAPLING;   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
 // どのツールで速く壊せるか
 const TOOL_FOR = {};
 for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, FURNACE, ICE]) TOOL_FOR[b] = 'pick';
@@ -229,6 +234,41 @@ for (const b of [LOG, PLANKS, TABLE]) TOOL_FOR[b] = 'axe';
 for (const b of [DIRT, GRASS, SAND, SNOW, SNOWGRASS, FARMLAND]) TOOL_FOR[b] = 'shovel';
 // ツルハシが無いとアイテムを落とさないブロック（値は必要なランク: 1=木・金, 2=石, 3=鉄, 4=ダイヤ）
 const NEED_PICK = { [STONE]: 1, [COBBLE]: 1, [SANDSTONE]: 1, [COAL_ORE]: 1, [FURNACE]: 1, [IRON_ORE]: 2, [GOLD_ORE]: 3, [DIAMOND_ORE]: 3 };
+// ---- 建材・ベッド・防具・道具（第2弾） ----
+Object.assign(NAME, { [WOOL]: '羊毛', [BED]: 'ベッド', [IRON_BLOCK]: '鉄ブロック', [GOLD_BLOCK]: '金ブロック', [DIAMOND_BLOCK]: 'ダイヤブロック',
+  [COAL_BLOCK]: '石炭ブロック', [STONE_BRICK]: '石レンガ', [GLASS]: 'ガラス', [CLAY]: '粘土', [BRICK]: 'レンガ', [SAPLING]: '苗木',
+  [CLOCK]: '時計', [SHEARS]: 'ハサミ', [BUCKET]: 'バケツ', [WATER_BUCKET]: '水入りバケツ', [APPLE]: 'リンゴ', [GOLDEN_APPLE]: '金のリンゴ', [SHIELD]: '盾' });
+COL[WOOL] = [[0.93, 0.93, 0.91], [0.86, 0.86, 0.84], [0.86, 0.86, 0.84]];
+COL[BED] = [[0.74, 0.17, 0.17], [0.68, 0.52, 0.30], [0.68, 0.52, 0.30]];
+COL[IRON_BLOCK] = [[0.86, 0.86, 0.88], [0.78, 0.78, 0.80], [0.74, 0.74, 0.76]];
+COL[GOLD_BLOCK] = [[0.98, 0.84, 0.28], [0.92, 0.74, 0.20], [0.86, 0.66, 0.16]];
+COL[DIAMOND_BLOCK] = [[0.42, 0.92, 0.89], [0.32, 0.82, 0.80], [0.26, 0.72, 0.72]];
+COL[COAL_BLOCK] = [[0.13, 0.13, 0.15], [0.10, 0.10, 0.12], [0.10, 0.10, 0.12]];
+COL[STONE_BRICK] = [[0.50, 0.50, 0.51], [0.45, 0.45, 0.47], [0.45, 0.45, 0.47]];
+COL[GLASS] = [[0.80, 0.92, 0.96], [0.74, 0.88, 0.94], [0.74, 0.88, 0.94]];
+COL[CLAY] = [[0.62, 0.65, 0.72], [0.58, 0.61, 0.68], [0.58, 0.61, 0.68]];
+COL[BRICK] = [[0.62, 0.34, 0.27], [0.58, 0.30, 0.24], [0.58, 0.30, 0.24]];
+COL[SAPLING] = COL[LEAF];
+HARD[WOOL] = 0.8; HARD[BED] = 0.3; HARD[IRON_BLOCK] = 5; HARD[GOLD_BLOCK] = 4; HARD[DIAMOND_BLOCK] = 5; HARD[COAL_BLOCK] = 4;
+HARD[STONE_BRICK] = 3; HARD[GLASS] = 0.3; HARD[CLAY] = 0.6; HARD[BRICK] = 3; HARD[SAPLING] = 0.05;
+for (const b of [IRON_BLOCK, GOLD_BLOCK, DIAMOND_BLOCK, COAL_BLOCK, STONE_BRICK, BRICK]) { TOOL_FOR[b] = 'pick'; NEED_PICK[b] = 1; }
+TOOL_FOR[CLAY] = 'shovel';
+SMELT[SAND] = GLASS; SMELT[CLAY] = BRICK;
+FOOD[APPLE] = 4; FOOD[GOLDEN_APPLE] = 20;
+// ハサミ（葉と羊毛を速く壊す・羊を刈る）と盾は、耐久のある道具としてツールと同じ扱い
+TOOLS[SHEARS] = { type: 'shears', tier: 2, speed: 5, dur: 238, lvl: 0, dmg: 1 };
+TOOLS[SHIELD] = { type: 'shield', tier: 2, speed: 1, dur: 336, lvl: 0, dmg: 1 };
+TOOL_FOR[LEAF] = TOOL_FOR[PINELEAF] = TOOL_FOR[WOOL] = 'shears';
+// 防具: 300 + ランク*10 + 部位（0=頭 1=胴 2=脚 3=足）。鉄・金・ダイヤのみ。def=防御（1につきダメージ4%減）
+const ARMOR = {};
+const ARMOR_PARTS = [['ヘルメット', [2, 2, 3], 11], ['チェストプレート', [6, 5, 8], 16], ['レギンス', [5, 3, 6], 15], ['ブーツ', [2, 1, 3], 13]];   // [名前, 防御(鉄,金,ダイヤ), 耐久の基準]
+const armorId = (tier, part) => 300 + tier * 10 + part;
+[2, 3, 4].forEach((ti, k) => ARMOR_PARTS.forEach(([label, defs, dm], pi) => {
+  const id = armorId(ti, pi);
+  ARMOR[id] = { part: pi, tier: ti, def: defs[k], dur: dm * [15, 7, 33][k] };
+  NAME[id] = TIERS[ti].name + 'の' + label;
+}));
+const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
 // ---------- ノイズ・バイオーム ----------
@@ -384,9 +424,10 @@ function genChunk(cx, cz) {
       for (let dy = 1; dy <= th; dy++) put(lx, h + dy, lz, CACTUS, true);
     }
   }
-  // 草: 草ブロックの上に一定確率で生える
+  // 草: 草ブロックの上に一定確率で生える。粘土: 水底の砂がところどころ粘土になる
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const h = hm[(z + M) * W + x + M];
+    if (h < SEA - 1 && d[(h * CS + z) * CS + x] === SAND && vnoise((cx * CS + x) * 0.12, (cz * CS + z) * 0.12, 97) > 0.7) d[(h * CS + z) * CS + x] = CLAY;
     if (h + 1 < H && d[(h * CS + z) * CS + x] === GRASS && d[((h + 1) * CS + z) * CS + x] === AIR
       && hash(cx * CS + x, cz * CS + z, 95) < (d.bio[z * CS + x] === B_PLAINS ? 0.16 : 0.08)) d[((h + 1) * CS + z) * CS + x] = TALLGRASS;
   }
@@ -430,11 +471,18 @@ function setBlock(x, y, z, b) {
     const k2 = ckey((x + dx) >> 4, (z + dz) >> 4);
     if (done.has(k2)) continue;
     done.add(k2);
-    const m = meshes.get(k2);
-    if (m) { freeMesh(m); meshes.set(k2, buildMesh(m.cx, m.cz)); }
+    if (meshBatch) meshBatch.add(k2); else remesh(k2);
   }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4);   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+function remesh(k) { const m = meshes.get(k); if (m) { freeMesh(m); meshes.set(k, buildMesh(m.cx, m.cz)); } }
+// たくさんのブロックを一度に変える時用: 描き直しを最後に1回だけにする
+let meshBatch = null;
+function batch(fn) {
+  meshBatch = new Set();
+  try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
+}
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const solid = b => opaque(b) || b === GLASS;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -530,6 +578,15 @@ function torchMesh(V, I, b, wx, y, wz) {
   box(0, 0.6, 0.0625, [0.46, 0.32, 0.17], [0.46, 0.32, 0.17]);
   box(0.5, 0.72, 0.085, [1.0, 0.72, 0.25], [1.0, 0.95, 0.65]);
 }
+// 箱1個ぶんの面を足す（ベッド・苗木など、四角いけれどマスいっぱいではない物用）
+function boxMesh(V, I, x0, y0, z0, x1, y1, z1, ct, cs, lt, tl) {
+  const nk = 1 + 0.4 * tl;
+  for (let f = 0; f < 6; f++) {
+    const D = DIRS[f], c3 = f === 2 ? ct : cs, l = SHADE[f] * lt, base = V.length / 9;
+    for (const c of CORNERS[f]) V.push(c[0] ? x1 : x0, c[1] ? y1 : y0, c[2] ? z1 : z0, c3[0] * l, c3[1] * l, c3[2] * l, D[0] * nk, D[1] * nk, D[2] * nk);
+    I.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+}
 function buildMesh(cx, cz) {
   const d = getChunk(cx, cz);
   const ov = [], oi = [], wv = [], wi = [];
@@ -540,17 +597,30 @@ function buildMesh(cx, cz) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
     if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
+    if (b === BED || b === SAPLING) {
+      const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
+      const X = ox + x, Z = oz + z;
+      if (b === BED) {   // 木の台・赤い布団・白い枕
+        boxMesh(ov, oi, X, y, Z, X + 1, y + 0.3, Z + 1, COL[PLANKS][0], COL[PLANKS][1], lt, tl);
+        boxMesh(ov, oi, X + 0.03, y + 0.3, Z + 0.03, X + 0.97, y + 0.56, Z + 0.97, COL[BED][0], [0.62, 0.13, 0.13], lt, tl);
+        boxMesh(ov, oi, X + 0.15, y + 0.56, Z + 0.08, X + 0.85, y + 0.66, Z + 0.38, [0.95, 0.95, 0.93], [0.86, 0.86, 0.84], lt, tl);
+      } else {           // 細い幹と葉のかたまり
+        boxMesh(ov, oi, X + 0.45, y, Z + 0.45, X + 0.55, y + 0.4, Z + 0.55, [0.46, 0.33, 0.19], [0.40, 0.29, 0.17], lt, tl);
+        boxMesh(ov, oi, X + 0.28, y + 0.35, Z + 0.28, X + 0.72, y + 0.8, Z + 0.72, COL[LEAF][0], COL[LEAF][1], lt, tl);
+      }
+      continue;
+    }
     if (isPlant(b)) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0;
       plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1), tl);
       continue;
     }
-    const isW = b === WATER, bi = d.bio[z * CS + x];
+    const isG = b === GLASS, isW = b === WATER || isG, bi = d.bio[z * CS + x];   // ガラスも水と同じ半透明の組に入れる
     for (let f = 0; f < 6; f++) {
       const D = DIRS[f], nx = x + D[0], ny = y + D[1], nz = z + D[2];
       if (ny < 0) continue;
       const nb = ny >= H ? AIR : (nx >= 0 && nx < CS && nz >= 0 && nz < CS) ? d[(ny * CS + nz) * CS + nx] : getBlock(ox + nx, ny, oz + nz);
-      if (isW ? nb !== AIR : opaque(nb)) continue;
+      if (isG ? (opaque(nb) || nb === GLASS) : isW ? nb !== AIR : opaque(nb)) continue;
       const c3 = colOf(b, FCI[f], bi), cs = CORNERS[f];
       // 空が見えない場所（洞窟・木陰）は、屋根からの深さに応じて暗くする
       let lt = 1;
@@ -561,7 +631,7 @@ function buildMesh(cx, cz) {
       // 松明の光: 面の前のマスの明るさ。昼の洞窟でも明るくなるよう色に焼き込み、夜用に法線の長さ（小数部分）でも渡す
       const tl = !isW && TL ? TL(nx, ny, nz) : 0;
       if (tl > lt) lt = tl;
-      const nk = (ORE_K[b] || 1) + 0.4 * tl;
+      const nk = isG ? 7 : (ORE_K[b] || 1) + 0.4 * tl;   // 7 はシェーダーでガラス（枠だけ濃い）として描く目印
       const V = isW ? wv : ov, I = isW ? wi : oi, base = V.length / 9;
       const t1 = TAN[f][0], t2 = TAN[f][1];
       for (let k = 0; k < 4; k++) {
@@ -580,7 +650,7 @@ function buildMesh(cx, cz) {
         }
         ao[k] = a;
         const l = SHADE[f] * (0.5 + a / 6) * lt;
-        const vy = y + c[1] - (isW && c[1] && f !== 3 && getBlock(ox + x, y + 1, oz + z) !== WATER ? 0.12 : 0);
+        const vy = y + c[1] - (b === WATER && c[1] && f !== 3 && getBlock(ox + x, y + 1, oz + z) !== WATER ? 0.12 : 0);
         V.push(ox + x + c[0], vy, oz + z + c[2], c3[0] * l, c3[1] * l, c3[2] * l, D[0] * nk, D[1] * nk, D[2] * nk);
       }
       if (ao[0] + ao[2] < ao[1] + ao[3]) I.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
@@ -610,7 +680,7 @@ void main(){
   vec3 p = mod(floor((vW - N*0.01)*8.0), 256.0);
   float n = fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453);
   vec3 c = vCol*(1.0 - uNoise*(0.10-0.18*n));
-  if (k > 1.5) {
+  if (k > 1.5 && k < 6.5) {
     vec3 q = mod(floor((vW - N*0.01)*4.0), 64.0);
     float m = fract(sin(dot(q, vec3(41.3,17.7,93.1)))*9173.3);
     if (m > 0.72) c = (k < 2.5 ? vec3(0.09,0.09,0.10) : k < 3.5 ? vec3(0.88,0.64,0.46) : k < 4.5 ? vec3(0.99,0.84,0.20) : vec3(0.36,0.94,0.90)) * dot(vCol, vec3(0.66));
@@ -618,7 +688,15 @@ void main(){
   float tl = clamp((k - floor(k + 0.05)) / 0.4, 0.0, 1.0);   // 松明の光（法線の長さの小数部分。鉱石の目印は整数部分）
   c *= max(uLight, tl * vec3(1.0, 0.82, 0.55));               // 夜でも松明の近くは暖色で明るい
   float f = clamp((vDist-uFog.x)/(uFog.y-uFog.x), 0.0, 1.0);
-  o = vec4(mix(c, uSky, f*f), mix(uAlpha, 1.0, f*f));
+  float al = uAlpha;
+  if (k > 6.5 && k < 7.5) {   // ガラス: 面のふちだけ白い枠、内側はほぼ透明
+    vec3 fr = fract(vW + N*0.001);
+    vec3 ed = (step(fr, vec3(0.08)) + step(vec3(0.92), fr)) * (1.0 - abs(N));
+    float e = min(1.0, ed.x + ed.y + ed.z);
+    c = mix(vec3(0.78, 0.90, 0.95), vec3(0.94, 0.98, 1.0), e) * max(uLight, vec3(0.5));
+    al = mix(0.14, 0.92, e);
+  }
+  o = vec4(mix(c, uSky, f*f), mix(al, 1.0, f*f));
 }`;
 function shader(type, src) {
   const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
@@ -793,6 +871,44 @@ const SPR = {}, SPR_IDS = [];
     },
   ];
   TIERS.forEach((T, ti) => DRAW.forEach((fn, yi) => mk(toolId(ti, yi), fn(T.pal))));
+  // ---- 第2弾のアイテム ----
+  mk(CLOCK, set => {
+    each((x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 7) set(x, y, d > 5.3 ? [236, 190, 60] : [244, 244, 236]); });
+    for (const [x, y] of [[7, 7], [7, 6], [7, 5], [7, 4], [8, 7], [9, 8], [10, 9]]) set(x, y, [40, 40, 48]);
+  });
+  mk(SHEARS, set => {
+    for (let i = 0; i < 8; i++) { set(3 + i, 3 + i, [214, 214, 222]); set(12 - i, 3 + i, [160, 160, 172]); }
+    for (const [cx, cy] of [[4, 12], [11, 12]]) each((x, y) => { const d = Math.hypot(x - cx, y - cy); if (d > 1.2 && d < 2.6) set(x, y, [190, 60, 50]); });
+  });
+  const bucket = water => set => {
+    for (let y = 5; y <= 13; y++) { const k = Math.floor((y - 5) / 3); for (let x = 3 + k; x <= 12 - k; x++) set(x, y, y === 5 ? [236, 236, 242] : x < 6 + k ? [200, 200, 210] : [150, 150, 162]); }
+    if (water) for (let x = 4; x <= 11; x++) { set(x, 5, [70, 130, 230]); set(x, 6, [50, 104, 204]); }
+  };
+  mk(BUCKET, bucket(false)); mk(WATER_BUCKET, bucket(true));
+  const apple = (c, dk) => set => {
+    each((x, y) => { if ((x - 7.5) ** 2 + (y - 9) ** 2 < 22) set(x, y, x + y < 15 ? c : dk); });
+    set(7, 3, [110, 76, 40]); set(8, 4, [110, 76, 40]); set(9, 3, [80, 150, 60]); set(10, 3, [80, 150, 60]); set(6, 7, [255, 255, 255]);
+  };
+  mk(APPLE, apple([222, 52, 44], [170, 30, 30])); mk(GOLDEN_APPLE, apple([252, 220, 80], [214, 160, 30]));
+  mk(SHIELD, set => {
+    for (let y = 2; y <= 13; y++) for (let x = 4; x <= 11; x++) {
+      if ((y === 2 || y === 13) && (x === 4 || x === 11)) continue;
+      set(x, y, x === 4 || x === 11 || y === 2 || y === 13 ? [170, 170, 180] : x < 8 ? [168, 122, 68] : [136, 96, 50]);
+    }
+    for (const [x, y] of [[7, 7], [8, 7], [7, 8], [8, 8]]) set(x, y, [226, 226, 232]);
+  });
+  mk(SAPLING, set => {
+    for (let y = 9; y <= 14; y++) { set(7, y, [120, 84, 46]); set(8, y, [90, 62, 32]); }
+    each((x, y) => { if ((x - 7.5) ** 2 / 20 + (y - 6) ** 2 / 14 < 1) set(x, y, (x * 7 + y * 3) % 5 < 2 ? [52, 140, 44] : [74, 170, 58]); });
+  });
+  // 防具（素材の色だけ変えて使い回す）
+  const ARM_DRAW = [
+    m => set => { for (let y = 4; y <= 10; y++) for (let x = 3; x <= 12; x++) { if (y === 4 && (x === 3 || x === 12)) continue; if (y >= 8 && x >= 6 && x <= 9) continue; set(x, y, y < 6 ? m[0] : m[1]); } for (let x = 4; x <= 7; x++) set(x, 5, [255, 255, 255]); },
+    m => set => { for (let y = 2; y <= 13; y++) for (let x = 2; x <= 13; x++) { const arm = x < 4 || x > 11; if (arm && y > 7) continue; if (y <= 3 && x >= 6 && x <= 9) continue; set(x, y, arm || y > 10 ? m[1] : m[0]); } },
+    m => set => { for (let y = 2; y <= 13; y++) for (let x = 4; x <= 11; x++) { if (y > 5 && (x === 7 || x === 8)) continue; set(x, y, y <= 3 ? m[0] : x < 8 ? m[0] : m[1]); } },
+    m => set => { for (const x0 of [2, 9]) for (let y = 6; y <= 13; y++) for (let x = x0; x <= x0 + 4; x++) { if (y < 11 && (x === x0 || x === x0 + 4)) continue; set(x, y, y >= 11 ? m[1] : m[0]); } },
+  ];
+  [2, 3, 4].forEach(ti => ARM_DRAW.forEach((fn, pi) => mk(armorId(ti, pi), fn(TIERS[ti].pal))));
 }
 const sprTex = gl.createTexture();
 {
@@ -860,14 +976,14 @@ function spawn() {
   for (let i = 0; i < 400 && heightAt(x, z) <= SEA + 1; i++) { x += 7; z += 3; }
   P.x = x + 0.5; P.z = z + 0.5; P.vx = P.vy = P.vz = 0;
   let y = H - 1;
-  while (y > 0 && !opaque(getBlock(x, y, z))) y--;
+  while (y > 0 && !solid(getBlock(x, y, z))) y--;
   P.y = y + 1;
 }
 const collides = (x, y, z) => boxHit(x, y, z, PW, PH);
 function boxHit(x, y, z, w, h) {   // 幅(半分)w・高さh の箱がブロックにめり込むか
   const x0 = Math.floor(x - w), x1 = Math.floor(x + w), y0 = Math.floor(y), y1 = Math.floor(y + h), z0 = Math.floor(z - w), z1 = Math.floor(z + w);
   for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++)
-    if (opaque(getBlock(bx, by, bz))) return true;
+    if (solid(getBlock(bx, by, bz))) return true;
   return false;
 }
 function moveAxis(dx, dy, dz) {
@@ -896,7 +1012,7 @@ let lastW = -1e9;
 const joy = { x: 0, y: 0, jump: false };
 const mouse = { l: false, r: false };
 let inWater = false, started = false, invOpen = false;
-const active = () => started && !invOpen && !chatOpen;
+const active = () => started && !invOpen && !chatOpen && !sleeping;
 function lookDir() {
   const cp = Math.cos(P.pitch);
   return [-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp];
@@ -938,10 +1054,10 @@ function damage(v, cause) {
   hurtEl.style.transition = 'none'; hurtEl.style.opacity = 0.35;
   requestAnimationFrame(() => { hurtEl.style.transition = ''; hurtEl.style.opacity = 0; });
   if (P.hp <= 0) {
-    P.hp = 20; P.st = 20; P.tired = false; P.kbx = P.kbz = 0; spawn();
+    P.hp = 20; P.st = 20; P.tired = false; P.kbx = P.kbz = 0;
+    const atBed = respawn();
     send({ t: 'died', cause: cause || '' });
-    toastEl.textContent = '力尽きた…… スタート地点に戻った'; toastEl.style.opacity = 1;
-    setTimeout(() => { toastEl.style.opacity = 0; }, 2200);
+    toast(atBed ? '力尽きた…… ベッドに戻った' : '力尽きた…… スタート地点に戻った');
   }
   drawStats();
 }
@@ -969,7 +1085,7 @@ function drawStats() {
 }
 
 // ---------- 破壊・設置 ----------
-function raycast(maxD) {
+function raycast(maxD, water) {   // water=true なら水面にも当たる（バケツ用）
   const ex = P.x, ey = eyeY(), ez = P.z, [dx, dy, dz] = lookDir();
   let x = Math.floor(ex), y = Math.floor(ey), z = Math.floor(ez);
   const sx = dx > 0 ? 1 : -1, sy = dy > 0 ? 1 : -1, sz = dz > 0 ? 1 : -1;
@@ -980,7 +1096,7 @@ function raycast(maxD) {
   let px = x, py = y, pz = z, t = 0;
   while (t <= maxD) {
     const b = getBlock(x, y, z);
-    if (opaque(b) || isPlant(b) || isTorch(b)) return { x, y, z, px, py, pz, b, t };
+    if ((b !== AIR && b !== WATER) || (water && b === WATER)) return { x, y, z, px, py, pz, b, t };
     px = x; py = y; pz = z;
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; }
@@ -997,6 +1113,12 @@ function dropsOf(b, tool) {
   const need = NEED_PICK[b];
   if (need && !(tool && tool.type === 'pick' && tool.lvl >= need)) return [];
   if (isTorch(b)) return [TORCH];   // 壁の松明も落とすのは普通の松明
+  if (b === LEAF || b === PINELEAF) {   // 葉: ハサミなら葉そのもの。素手などは 6% で苗木、2% でリンゴ、あとは何も落とさない
+    if (tool && tool.type === 'shears') return [b];
+    const r = Math.random();
+    return r < 0.06 ? [SAPLING] : r < 0.08 ? [APPLE] : [];
+  }
+  if (b === GLASS) return [];   // ガラスは割れて無くなる
   if (b === TALLGRASS) return Math.random() < 0.15 ? [SEEDS] : [];          // 草: 15% で種
   if (b === WHEAT3) return Math.random() < 0.5 ? [WHEAT, SEEDS, SEEDS] : [WHEAT, SEEDS];
   if (b >= WHEAT0 && b < WHEAT3) return [SEEDS];
@@ -1049,10 +1171,11 @@ function useTool() {   // 手に持っているツールの耐久を1減らす
 function tryPlace() {
   const st = slots[sel];
   if (st && st.b === TORCH) return placeTorch(st);
+  if (st && st.b === SAPLING) return plantSapling(st);
   if (!target || !st || st.b >= 100) return;
   // 草などを狙っている時は、その場所に置き換える
   const x = isPlant(target.b) ? target.x : target.px, y = isPlant(target.b) ? target.y : target.py, z = isPlant(target.b) ? target.z : target.pz;
-  if (y < 0 || y >= H || opaque(getBlock(x, y, z))) return;
+  if (y < 0 || y >= H || solid(getBlock(x, y, z)) || getBlock(x, y, z) === BED) return;
   // プレイヤーと重なる位置には置けない
   if (x + 1 > P.x - PW && x < P.x + PW && z + 1 > P.z - PW && z < P.z + PW && y + 1 > P.y && y < P.y + PH) return;
   if (occupied(x, y, z)) return;
@@ -1071,6 +1194,8 @@ function occupied(x, y, z) {
 function useItem() {
   const st = slots[sel];
   if (target && !P.sneak && (target.b === TABLE || target.b === FURNACE)) { mouse.r = false; openInv(target.b === TABLE ? 3 : 'furnace'); return; }
+  if (target && !P.sneak && target.b === BED) { mouse.r = false; useBed(target); return; }
+  if (st && (st.b === BUCKET || st.b === WATER_BUCKET)) { if (useBucket(st)) placeCd = 0.4; return; }
   if (st && FOOD[st.b]) {
     if (P.hp < 20) { P.hp = Math.min(20, P.hp + FOOD[st.b]); if (--st.n <= 0) slots[sel] = null; refreshUI(); drawStats(); placeCd = 0.6; }
     return;
@@ -1079,7 +1204,7 @@ function useItem() {
   const { x, y, z } = target;
   if (st && TOOLS[st.b] && TOOLS[st.b].type === 'hoe' && (target.b === GRASS || target.b === DIRT)) {
     const up = getBlock(x, y + 1, z);
-    if (opaque(up) || up === WATER) return;
+    if (solid(up) || up === WATER || up === BED) return;
     if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
     netSet(x, y, z, FARMLAND, target.b);
     useTool();
@@ -1105,12 +1230,109 @@ function updateInteract(dt) {
     const tool = heldTool(), need = breakTime(target.b, tool);
     if (breakT >= need) {
       breakBlock(target.x, target.y, target.z, target.b, tool);   // ドロップはサーバーが出す
-      if (tool && !isPlant(target.b) && !isTorch(target.b)) useTool();
+      if (tool && tool.type !== 'shield' && !isPlant(target.b) && !isTorch(target.b)) useTool();
       breakT = 0; breakKey = '';
     } else if (need < Infinity) prog = breakT / need;
   } else { breakT = 0; breakKey = ''; }
   if (mouse.r && placeCd <= 0 && active()) { placeCd = 0.25; useItem(); }
   breakProg = prog;
+}
+
+// ---------- ベッド・防具・盾・バケツ・苗木（第2弾） ----------
+function toast(text) { toastEl.textContent = text; toastEl.style.opacity = 1; setTimeout(() => { toastEl.style.opacity = 0; }, 2200); }
+// ベッド: 右クリックで復活地点になる。夜なら寝る（全員が寝ると朝になる）
+let sleeping = false;
+const nightNow = () => tod > 0.76 || tod < 0.24;
+function useBed(t) {
+  P.bed = { x: t.x, y: t.y, z: t.z };
+  saveLocal();
+  if (!nightNow()) { toast('復活地点をこのベッドにした（寝られるのは夜だけ）'); return; }
+  sleeping = true; $('sleep').style.display = 'flex';
+  for (const k in keys) keys[k] = false;
+  mouse.l = mouse.r = false;
+  send({ t: 'sleep', v: 1 });
+}
+function wake(silent) {
+  if (!sleeping) return;
+  sleeping = false; $('sleep').style.display = 'none';
+  if (!silent) send({ t: 'sleep', v: 0 });
+}
+// 倒れた時の戻り先。ベッドが残っていればそこ、無ければスタート地点
+function respawn() {
+  const b = P.bed;
+  if (b && getBlock(b.x, b.y, b.z) === BED && !collides(b.x + 0.5, b.y, b.z + 0.5)) {
+    P.x = b.x + 0.5; P.y = b.y; P.z = b.z + 0.5; P.vx = P.vy = P.vz = 0;
+    return true;
+  }
+  spawn();
+  return false;
+}
+// 防具: 着ている分だけダメージを減らし、各部位の耐久を1減らす（落下ダメージには効かない）
+function armorReduce(dmg) {
+  let def = 0;
+  for (let i = 36; i < 40; i++) {
+    const s = slots[i], a = s && ARMOR[s.b];
+    if (!a) continue;
+    def += a.def;
+    if (--s.d <= 0) slots[i] = null;
+  }
+  if (!def) return dmg;
+  refreshUI();
+  return Math.max(1, Math.round(dmg * (1 - def * 0.04)));
+}
+// 他の人に見せる用: 4部位それぞれの素材ランク（0=なし）を並べた文字列。例 "2034"
+const eqCode = () => [36, 37, 38, 39].map(i => { const s = slots[i], a = s && ARMOR[s.b]; return a ? a.tier : 0; }).join('');
+// 盾: 右クリックを押している間、手に持っている（選択中 or 手スロット）盾で正面からの攻撃を半減
+function blockingSlot() {
+  if (!mouse.r || !active()) return -1;
+  for (const i of [sel, 40, 41]) if (slots[i] && slots[i].b === SHIELD) return i;
+  return -1;
+}
+// バケツ: 水を汲む／置く。水は流れないので、置いた1マスだけが水になる
+function useBucket(st) {
+  if (st.b === BUCKET) {
+    const w = raycast(REACH, true);
+    if (!w || w.b !== WATER) return false;
+    netSet(w.x, w.y, w.z, AIR, WATER);
+    slots[sel] = { b: WATER_BUCKET, n: 1 };
+  } else {
+    if (!target) return false;
+    const rep = isPlant(target.b), x = rep ? target.x : target.px, y = rep ? target.y : target.py, z = rep ? target.z : target.pz;
+    const cur = getBlock(x, y, z);
+    if (y < 1 || y >= H || solid(cur) || cur === BED || isTorch(cur)) return false;
+    netSet(x, y, z, WATER, cur);
+    slots[sel] = { b: BUCKET, n: 1 };
+  }
+  refreshUI();
+  return true;
+}
+// 苗木: 草ブロックか土の上にだけ植えられる
+function plantSapling(st) {
+  if (!target) return;
+  const onPlant = isPlant(target.b) && target.b !== SAPLING, x = target.x, y = onPlant ? target.y - 1 : target.y, z = target.z;
+  const g = getBlock(x, y, z), up = getBlock(x, y + 1, z);
+  if (!(g === GRASS || g === DIRT || g === SNOWGRASS) || y + 1 >= H || !(up === AIR || (isPlant(up) && up !== SAPLING))) return;
+  netSet(x, y + 1, z, SAPLING, up);
+  if (--st.n <= 0) slots[sel] = null;
+  refreshUI();
+}
+// 苗木が木に育つ: サーバーは地形を知らないので、頼まれたブラウザが空きを確かめて木を組み立てる
+function growTree(x, y, z) {
+  if (getBlock(x, y, z) !== SAPLING) return;
+  const th = 4 + Math.floor(Math.random() * 3);
+  for (let dy = 1; dy <= th + 1; dy++) if (y + dy >= H || solid(getBlock(x, y + dy, z))) return;   // 上がふさがっていたら育たない
+  const l = [];
+  for (let dy = 0; dy < th; dy++) l.push([x, y + dy, z, LOG, getBlock(x, y + dy, z)]);
+  for (let dy = th - 3; dy <= th; dy++) {
+    const r = dy >= th - 1 ? 1 : 2;
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.abs(dx) === r && Math.abs(dz) === r && (r === 2 || dy === th)) continue;
+      if (dx === 0 && dz === 0 && dy < th) continue;
+      const cur = getBlock(x + dx, y + dy, z + dz);
+      if (cur === AIR || cur === TALLGRASS) l.push([x + dx, y + dy, z + dz, LEAF, cur]);
+    }
+  }
+  netSets(l);
 }
 
 // ---------- ドロップアイテム ----------
@@ -1137,15 +1359,15 @@ function updateItems(dt) {
     const ddx = e.x - P.x, ddz = e.z - P.z;
     if (ddx * ddx + ddz * ddz > RD * CS * RD * CS) continue;
     const here = getBlock(fl(e.x), fl(e.y + 0.05), fl(e.z));
-    if (opaque(here)) { e.y = fl(e.y + 0.05) + 1; e.vy = 0; }   // 埋まったら上に押し出す
+    if (solid(here)) { e.y = fl(e.y + 0.05) + 1; e.vy = 0; }   // 埋まったら上に押し出す
     else if (here === WATER) { e.vy = Math.min(e.vy + 12 * dt, 1.2); e.vx *= 0.9; e.vz *= 0.9; }
     else e.vy = Math.max(e.vy - 22 * dt, -9);
     const nx = e.x + e.vx * dt;
-    if (opaque(getBlock(fl(nx), fl(e.y + 0.05), fl(e.z)))) e.vx = 0; else e.x = nx;
+    if (solid(getBlock(fl(nx), fl(e.y + 0.05), fl(e.z)))) e.vx = 0; else e.x = nx;
     const nz = e.z + e.vz * dt;
-    if (opaque(getBlock(fl(e.x), fl(e.y + 0.05), fl(nz)))) e.vz = 0; else e.z = nz;
+    if (solid(getBlock(fl(e.x), fl(e.y + 0.05), fl(nz)))) e.vz = 0; else e.z = nz;
     const ny = e.y + e.vy * dt;
-    if (opaque(getBlock(fl(e.x), fl(ny), fl(e.z)))) {
+    if (solid(getBlock(fl(e.x), fl(ny), fl(e.z)))) {
       if (e.vy < 0) {
         e.y = fl(ny) + 1; const fr = Math.pow(0.002, dt); e.vx *= fr; e.vz *= fr;
         // 自分が出したアイテムが止まったら、その位置をサーバーに知らせる
@@ -1259,7 +1481,9 @@ const HOTBAR = [...Array(9).keys()], STORE = [...Array(27).keys()].map(i => i + 
 const INV_ORDER = HOTBAR.concat(STORE), CRAFT = [...Array(9).keys()].map(i => i + 42), CRAFT2 = [42, 43, 45, 46];
 const FURN = [51, 52, 53];
 let sel = 0, held = null, craftSize = 2, station = 2, burn = 0, smeltT = 0;
-const maxStack = b => TOOLS[b] ? 1 : STACK;
+const maxStack = b => (TOOLS[b] || ARMOR[b] || b === BUCKET || b === WATER_BUCKET || b === BED) ? 1 : STACK;
+// 防具枠(36〜39)には、その部位の防具しか入らない
+const fitsSlot = (i, st) => i < 36 || i > 39 || !!(ARMOR[st.b] && ARMOR[st.b].part === i - 36);
 function insert(st, order) {   // 入りきらなかった数を返す
   const mx = maxStack(st.b);
   if (mx > 1) for (const i of order) { const s = slots[i]; if (st.n > 0 && s && s.b === st.b && s.n < mx) { const m = Math.min(mx - s.n, st.n); s.n += m; st.n -= m; } }
@@ -1278,6 +1502,20 @@ const RECIPES = [
 RECIPES.push({ p: ['CCC', 'C C', 'CCC'], k: { C: COBBLE }, out: [FURNACE, 1] }, { p: ['WWW'], k: { W: WHEAT }, out: [BREAD, 1] });
 // 松明: 石炭か木炭を棒の上に置くと4本
 RECIPES.push({ p: ['C', 'S'], k: { C: COAL, S: STICK }, out: [TORCH, 4] }, { p: ['C', 'S'], k: { C: CHARCOAL, S: STICK }, out: [TORCH, 4] });
+// 第2弾: 建材・ベッド・道具・防具
+const nine = (k, a, b2) => [{ p: ['XXX', 'XXX', 'XXX'], k: { X: a }, out: [b2, 1] }, { p: ['X'], k: { X: b2 }, out: [a, 9], hide: true }];
+RECIPES.push(
+  { p: ['WWW', 'PPP'], k: { W: WOOL, P: PLANKS }, out: [BED, 1] },
+  { p: ['SS', 'SS'], k: { S: STONE }, out: [STONE_BRICK, 4] },
+  ...nine(0, IRON_INGOT, IRON_BLOCK), ...nine(0, GOLD_INGOT, GOLD_BLOCK), ...nine(0, DIAMOND, DIAMOND_BLOCK), ...nine(0, COAL, COAL_BLOCK),
+  { p: [' I', 'I '], k: { I: IRON_INGOT }, out: [SHEARS, 1] },
+  { p: ['I I', ' I '], k: { I: IRON_INGOT }, out: [BUCKET, 1] },
+  { p: ['PIP', 'PPP', ' P '], k: { P: PLANKS, I: IRON_INGOT }, out: [SHIELD, 1] },
+  { p: [' G ', 'GCG', ' G '], k: { G: GOLD_INGOT, C: COAL }, out: [CLOCK, 1] },
+  { p: ['GGG', 'GAG', 'GGG'], k: { G: GOLD_INGOT, A: APPLE }, out: [GOLDEN_APPLE, 1] },
+);
+const ARMOR_PAT = [['MMM', 'M M'], ['M M', 'MMM', 'MMM'], ['MMM', 'M M', 'M M'], ['M M', 'M M']];
+[2, 3, 4].forEach(ti => ARMOR_PAT.forEach((p, pi) => RECIPES.push({ p, k: { M: TIERS[ti].mat }, out: [armorId(ti, pi), 1], hide: ti > 2 })));
 // ツール: ツルハシ・斧・シャベル・剣・クワ × 5素材
 const TOOL_PAT = [['MMM', ' S ', ' S '], ['MM', 'MS', ' S'], ['M', 'S', 'S'], ['M', 'M', 'S'], ['MM', ' S', ' S']];
 TIERS.forEach((T, ti) => TOOL_PAT.forEach((p, yi) => RECIPES.push({ p, k: { M: T.mat, S: STICK }, out: [toolId(ti, yi), 1], hide: ti > 0 })));
@@ -1307,7 +1545,7 @@ function craftResult() {
 function craftTake(shift) {
   const out = craftResult();
   if (!out) return;
-  const mk = () => { const o = { b: out[0], n: out[1] }; if (TOOLS[o.b]) o.d = TOOLS[o.b].dur; return o; };
+  const mk = () => { const o = { b: out[0], n: out[1] }; if (durOf(o.b)) o.d = durOf(o.b); return o; };
   const consume = () => { for (const i of CRAFT) { const s = slots[i]; if (s && --s.n <= 0) slots[i] = null; } };
   if (shift) {   // 作れるだけ作ってインベントリへ
     for (let k = 0; k < 64; k++) {
@@ -1384,15 +1622,17 @@ for (const R of RECIPES) {
   txt.innerHTML = `→ <img src="${icon(R.out[0])}" alt="" style="width:18px;height:18px;vertical-align:middle"> ${NAME[R.out[0]]}${R.out[1] > 1 ? ' ×' + R.out[1] : ''}${R.p.length > 2 || R.p[0].length > 2 ? '（作業台）' : ''}`;
   row.appendChild(grid); row.appendChild(txt); $('recipes').appendChild(row);
 }
-for (const text of ['ツールは板材を 丸石・鉄インゴット・金インゴット・ダイヤ に変えると上位版になる。',
+for (const text of ['ツールは板材を 丸石・鉄インゴット・金インゴット・ダイヤ に変えると上位版になる。防具は鉄を 金・ダイヤ に変えても作れる。',
+  'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
+  'かまど追加分: 砂→ガラス / 粘土→レンガ。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   'かまど（材料＋燃料）: 鉄鉱石→鉄 / 金鉱石→金 / 丸石→石 / 原木→石炭 / 生肉→焼いた肉。燃料は石炭・原木・板材・棒。',
   '農業: クワで草ブロックか土を右クリック → 種を植える → 金色になったら収穫。']) {
   const n = document.createElement('div'); n.className = 'note'; n.textContent = text; $('recipes').appendChild(n);
 }
 function html(st) {
   if (!st) return '';
-  const t = TOOLS[st.b];
-  const bar = t && st.d < t.dur ? `<u style="width:${Math.max(2, Math.round(32 * st.d / t.dur))}px"></u>` : '';
+  const dur = durOf(st.b);
+  const bar = dur && st.d < dur ? `<u style="width:${Math.max(2, Math.round(32 * st.d / dur))}px"></u>` : '';
   return `<img src="${icon(st.b)}" alt=""><span>${st.n > 1 ? st.n : ''}</span>${bar}`;
 }
 const heldEl = $('held'), invEl = $('inv'), resEl = $('result');
@@ -1413,6 +1653,10 @@ function slotClick(i, right, shift) {
     refreshUI(); return;
   }
   const s = slots[i], merge = s && held && s.b === held.b && maxStack(s.b) > 1;
+  if (!shift && held && !fitsSlot(i, held)) return;
+  if (shift && s && i < 36 && ARMOR[s.b] && !slots[36 + ARMOR[s.b].part]) {   // Shift+クリックで防具を着る
+    slots[36 + ARMOR[s.b].part] = s; slots[i] = null; refreshUI(); return;
+  }
   if (shift) {
     if (!s) return;
     const order = i < 9 ? STORE : i < 36 ? HOTBAR : STORE.concat(HOTBAR);
@@ -1447,7 +1691,7 @@ invEl.addEventListener('mousedown', e => {
 let drag = null;
 function canTake(i) {
   const s = slots[i];
-  return i !== 53 && !slotEls[i].classList.contains('hid') && (!s || (s.b === held.b && maxStack(s.b) > 1 && s.n < STACK));
+  return i !== 53 && fitsSlot(i, held) && !slotEls[i].classList.contains('hid') && (!s || (s.b === held.b && maxStack(s.b) > 1 && s.n < STACK));
 }
 function dragAdd(i) {
   if (drag.snap.has(i) || drag.list.length >= drag.held0.n) return;   // 手持ちの数より多い枠には広げられない
@@ -1470,7 +1714,7 @@ invEl.addEventListener('mouseover', e => {
   const el = e.target.closest ? e.target.closest('.slot') : null;
   if (!el || el.dataset.i === undefined) return;
   const i = +el.dataset.i, s = slots[i], h = drag.held0;
-  if (i === 53 || drag.snap.has(i) || slotEls[i].classList.contains('hid')) return;
+  if (i === 53 || !fitsSlot(i, h) || drag.snap.has(i) || slotEls[i].classList.contains('hid')) return;
   if (!s || (s.b === h.b && maxStack(s.b) > 1 && s.n < STACK)) dragAdd(i);
 });
 addEventListener('mouseup', () => { drag = null; });
@@ -1569,6 +1813,7 @@ addEventListener('keydown', e => {
   }
   if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
   if (e.repeat) return;
+  if (sleeping) { wake(); return; }
   if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !invOpen) { e.preventDefault(); openChat(); return; }
   if (e.code === 'KeyE') { invOpen ? closeInv() : openInv(); return; }
   if (e.code === 'Escape' && invOpen) { closeInv(); return; }
@@ -1673,11 +1918,16 @@ function netSet(x, y, z, b, was, drop) {
   setBlock(x, y, z, b);
   send({ t: 'set', x, y, z, b, was, drop });
 }
+// まとめて変える版（木が育つ時など）。l は [x, y, z, 新しいブロック, 元のブロック] の並び
+function netSets(l) {
+  batch(() => { for (const [x, y, z, b] of l) setBlock(x, y, z, b); });
+  send({ t: 'sets', l });
+}
 function addOther(p) {
   const el = document.createElement('div'); el.className = 'tag'; el.textContent = p.name;
   $('names').appendChild(el);
   others.set(p.id, { name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw || 0, pitch: p.pitch || 0,
-    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, phase: 0, speed: 0, hurt: 0, el });
+    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, eq: p.eq || '0000', phase: 0, speed: 0, hurt: 0, el });
 }
 const NET = {
   init(m) {
@@ -1698,14 +1948,18 @@ const NET = {
     if (o) { o.el.remove(); others.delete(m.id); addChat('', `${o.name} が退出した`); }
   },
   ps(m) {
-    for (const [id, x, y, z, yaw, pitch, sn] of m.l) {
+    for (const [id, x, y, z, yaw, pitch, sn, eq] of m.l) {
       const o = others.get(id);
       if (!o) continue;
       if (o.ty < -50) { o.x = x; o.y = y; o.z = z; }   // 初回は補間せずその場に出す
-      o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.tpitch = pitch; o.sn = sn;
+      o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.tpitch = pitch; o.sn = sn; o.eq = eq || '0000';
     }
   },
   set(m) { netApply(m.x, m.y, m.z, m.b); },
+  sets(m) { batch(() => { for (const [x, y, z, b] of m.l) netApply(x, y, z, b); }); },
+  grow(m) { growTree(m.x, m.y, m.z); },
+  wake(m) { wake(true); if (m.msg) toast(m.msg); },
+  mshear(m) { const mb = mobs.get(m.id); if (mb) mb.sheared = !!m.v; },
   item(m) { m.it.age = 0; items.push(m.it); },
   rm(m) { const i = items.findIndex(e => e.id === m.id); if (i >= 0) items.splice(i, 1); },
   give(m) {   // 拾えた（または設置が取り消された）
@@ -1797,7 +2051,7 @@ const saveKey = () => 'blockcraft-save-' + seed + '-' + myName;
 function saveLocal() {
   if (!myId || kicked) return;   // 別タブに切り替わった後は、古いタブから上書きしない
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp }));
+    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, bed: P.bed }));
   } catch (e) {}
 }
 function loadLocal() {
@@ -1822,10 +2076,11 @@ function loadLocal() {
     P.x = s.x; P.y = s.y; P.z = s.z; P.yaw = s.yaw || 0; P.pitch = s.pitch || 0;
   }
   if (s.hp > 0 && s.hp <= 20) P.hp = s.hp;
+  if (s.bed && [s.bed.x, s.bed.y, s.bed.z].every(Number.isInteger)) P.bed = s.bed;
   // 空中で保存されていたら（飛行があった頃のデータ・落下中に切れた時）、真下の地面に降ろす。
   // そのまま再開すると入り直した瞬間に墜落して落下ダメージを受けるため
   let gy = Math.floor(P.y) - 1;
-  const stand = b => opaque(b) || b === WATER;   // 海の上なら海底ではなく水面に降ろす
+  const stand = b => solid(b) || b === WATER;   // 海の上なら海底ではなく水面に降ろす
   while (gy > 0 && !stand(getBlock(Math.floor(P.x), gy, Math.floor(P.z)))) gy--;
   if (P.y - (gy + 1) >= 3) { P.y = gy + 1; P.vy = 0; }
 }
@@ -1836,7 +2091,7 @@ function netTick(dt) {
   posT += dt;
   if (posT >= 0.1) {
     posT = 0;
-    const m = { t: 'pos', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(2), pitch: +P.pitch.toFixed(2), sn: P.sneak ? 1 : 0 };
+    const m = { t: 'pos', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(2), pitch: +P.pitch.toFixed(2), sn: P.sneak ? 1 : 0, eq: eqCode() };
     const s = JSON.stringify(m);
     if (s !== lastPos) { lastPos = s; send(m); }
     const l = [];
@@ -1875,16 +2130,21 @@ const SHIRTS = [[0.20, 0.62, 0.72], [0.80, 0.30, 0.28], [0.36, 0.66, 0.30], [0.8
 function drawPlayers() {
   let o = 0, boxes = 0;
   for (const [id, p] of others) {
-    if (p.ty < -50 || boxes + 8 > MAXCUBE) continue;
-    const red = p.hurt > 0, sh = tintRed(SHIRTS[id % SHIRTS.length], red), y = p.y - (p.sn ? 0.12 : 0);
-    const SKIN = tintRed(SKIN0, red), PANTS = tintRed(PANTS0, red), HAIR = tintRed(HAIR0, red);
+    if (p.ty < -50 || boxes + 11 > MAXCUBE) continue;
+    // 着ている防具の色（素材のランク 0=なし）。胴は服と腕、脚はズボンの色を置き換え、頭と足は箱を足す
+    const eq = p.eq || '0000', AC = k => { const t = +eq[k]; return t ? tintRed(TIERS[t].pal[0].map(v => v / 255), p.hurt > 0) : null; };
+    const aHead = AC(0), aBody = AC(1), aLegs = AC(2), aFeet = AC(3);
+    const red = p.hurt > 0, sh = aBody || tintRed(SHIRTS[id % SHIRTS.length], red), y = p.y - (p.sn ? 0.12 : 0);
+    const SKIN = tintRed(SKIN0, red), PANTS = aLegs || tintRed(PANTS0, red), HAIR = tintRed(HAIR0, red), ARM = aBody || SKIN;
     const sw = Math.sin(p.phase) * 0.8 * Math.min(1, p.speed / 4);
     const B = (pv, sz, off, rx, ct, cs) => { o = pushBox(o, p.x, y, p.z, p.yaw, pv, sz, off, rx, ct, cs); boxes++; };
     B([-0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, PANTS, PANTS);
     B([0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], -sw, PANTS, PANTS);
     B([0, 0.675, 0], [0.45, 0.675, 0.225], [0, 0.3375, 0], p.sn ? -0.25 : 0, sh, sh);
-    B([-0.3375, 1.35, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], -sw, sh, SKIN);
-    B([0.3375, 1.35, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, sh, SKIN);
+    B([-0.3375, 1.35, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], -sw, sh, ARM);
+    B([0.3375, 1.35, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, sh, ARM);
+    if (aHead) B([0, 1.35, 0], [0.5, 0.26, 0.5], [0, 0.35, 0], p.pitch, aHead, aHead);
+    if (aFeet) { B([-0.1125, 0.675, 0], [0.25, 0.2, 0.25], [0, -0.575, 0], sw, aFeet, aFeet); B([0.1125, 0.675, 0], [0.25, 0.2, 0.25], [0, -0.575, 0], -sw, aFeet, aFeet); }
     B([0, 1.35, 0], [0.45, 0.45, 0.45], [0, 0.225, 0], p.pitch, HAIR, SKIN);
     B([0, 1.35, 0], [0.08, 0.08, 0.02], [-0.1, 0.25, -0.23], p.pitch, EYE_C, EYE_C);
     B([0, 1.35, 0], [0.08, 0.08, 0.02], [0.1, 0.25, -0.23], p.pitch, EYE_C, EYE_C);
@@ -1915,6 +2175,7 @@ const MOBS = {
   pig:     { w: 0.4,  h: 0.9, speed: 1.6 },
   cow:     { w: 0.45, h: 1.3, speed: 1.4 },
   chicken: { w: 0.22, h: 0.7, speed: 1.5 },
+  sheep:   { w: 0.42, h: 1.1, speed: 1.5 },
 };
 const mobs = new Map();
 function addMob(m) {
@@ -2010,6 +2271,10 @@ function attack() {
   }
   if (hit === null) return false;
   atkCd = 0.35;
+  if (isMob && slots[sel] && slots[sel].b === SHEARS) {   // ハサミを持って羊を左クリック: 倒さずに毛を刈る
+    const mb = mobs.get(hit);
+    if (mb.kind === 'sheep') { if (!mb.sheared) { mb.sheared = true; send({ t: 'shear', id: hit }); useTool(); } return true; }
+  }
   const tool = heldTool(), dmg = tool ? tool.dmg : 1, l = Math.hypot(d[0], d[2]) || 1;
   send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6 });
   if (tool) useTool();
@@ -2018,6 +2283,14 @@ function attack() {
 // 自分がダメージを受けた（他プレイヤーかゾンビから）
 function hurtMe(dmg, kx, kz, cause) {
   if (P.inv > 0) return;
+  wake();
+  const sh = blockingSlot(), ld = lookDir();
+  if (sh >= 0 && ld[0] * kx + ld[2] * kz < 0) {   // 盾: 正面から来た攻撃だけ半減
+    dmg = Math.ceil(dmg / 2); kx *= 0.4; kz *= 0.4;
+    if (--slots[sh].d <= 0) slots[sh] = null;
+    refreshUI();
+  }
+  dmg = armorReduce(dmg);
   P.inv = 0.45; P.kbx = kx; P.kbz = kz;
   if (P.ground) P.vy = 5;
   damage(dmg, cause);
@@ -2029,6 +2302,8 @@ const QUAD = {   // 胴[幅,高さ,長さ] 脚の高さ 頭[幅,高さ,長さ] �
   pig:     { b: [0.5, 0.42, 0.8], leg: 0.28, hd: [0.4, 0.38, 0.36], top: [0.94, 0.64, 0.64], side: [0.88, 0.56, 0.58], nose: [0.80, 0.42, 0.46] },
   cow:     { b: [0.6, 0.58, 1.0], leg: 0.55, hd: [0.42, 0.42, 0.36], top: [0.30, 0.20, 0.14], side: [0.36, 0.25, 0.18], nose: [0.86, 0.82, 0.78] },
   chicken: { b: [0.3, 0.3, 0.42], leg: 0.24, hd: [0.2, 0.26, 0.2], top: [0.96, 0.96, 0.94], side: [0.88, 0.88, 0.86], nose: [0.92, 0.70, 0.16] },
+  sheep:   { b: [0.64, 0.6, 0.92], leg: 0.42, hd: [0.36, 0.36, 0.34], top: [0.95, 0.95, 0.93], side: [0.87, 0.87, 0.85], nose: [0.80, 0.68, 0.62] },
+  sheepS:  { b: [0.48, 0.46, 0.86], leg: 0.42, hd: [0.36, 0.36, 0.34], top: [0.90, 0.76, 0.70], side: [0.84, 0.70, 0.64], nose: [0.80, 0.68, 0.62] },   // 毛を刈られた羊
 };
 function drawMobs() {
   let o = 0, boxes = 0;
@@ -2046,7 +2321,7 @@ function drawMobs() {
       B([0, 1.35, 0], [0.08, 0.08, 0.02], [-0.1, 0.25, -0.23], 0, EYE_C, EYE_C);
       B([0, 1.35, 0], [0.08, 0.08, 0.02], [0.1, 0.25, -0.23], 0, EYE_C, EYE_C);
     } else {
-      const Q = QUAD[m.kind], [bw, bh, bl] = Q.b, L = Q.leg, lw = m.kind === 'chicken' ? 0.06 : 0.16;
+      const Q = m.sheared ? QUAD.sheepS : QUAD[m.kind], [bw, bh, bl] = Q.b, L = Q.leg, lw = m.kind === 'chicken' ? 0.06 : 0.16;
       const lx = bw / 2 - lw / 2 - 0.02, lz = m.kind === 'chicken' ? 0 : bl / 2 - lw / 2 - 0.04;
       const legC = m.kind === 'chicken' ? Q.nose : Q.side;
       B([0, L, 0], [bw, bh, bl], [0, bh / 2, 0], 0, Q.top, Q.side);
@@ -2069,7 +2344,7 @@ function pickSpawn(kind) {
     const a = Math.random() * Math.PI * 2, r = 16 + Math.random() * 24;
     const x = Math.floor(P.x + Math.cos(a) * r), z = Math.floor(P.z + Math.sin(a) * r);
     let y = H - 1;
-    while (y > 1 && !opaque(getBlock(x, y, z))) y--;
+    while (y > 1 && !solid(getBlock(x, y, z))) y--;
     const g = getBlock(x, y, z);
     if (y + 3 >= H || getBlock(x, y + 1, z) === WATER) continue;
     if (kind === 'zombie' ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
@@ -2183,7 +2458,7 @@ function frame(t) {
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
-    hud.textContent = `XYZ  ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)}\nバイオーム ${placeName()}\nFPS  ${fps.toFixed(0)}   チャンク ${meshes.size}\n時刻 ${clock()}   オンライン ${others.size + 1}人\nSEED ${seed}   視野角 ${fov}`;
+    hud.textContent = `XYZ  ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)}\nバイオーム ${placeName()}\nFPS  ${fps.toFixed(0)}   チャンク ${meshes.size}\n時刻 ${slots.some((s, i) => i < 42 && s && s.b === CLOCK) ? clock() : '??:??（時計が必要）'}   オンライン ${others.size + 1}人\nSEED ${seed}   視野角 ${fov}`;
   }
   requestAnimationFrame(frame);
 }
