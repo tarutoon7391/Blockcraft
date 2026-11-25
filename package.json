@@ -1,0 +1,9 @@
+{
+  "name": "blockcraft",
+  "version": "1.0.0",
+  "description": "マイクラ風ボクセルゲーム BlockCraft（オンライン版）",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}
