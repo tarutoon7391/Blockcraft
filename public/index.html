@@ -31,6 +31,12 @@
   .slot u { position: absolute; left: 3px; bottom: 2px; height: 3px; background: #3ddc3d; box-shadow: 0 0 0 1px #0008; pointer-events: none; }
   .slot.hid { display: none; }
   #recipes { background: #c6c6c6; border: 3px solid; border-color: #fff #555 #555 #fff; padding: 10px 12px; margin-left: 10px; color: #3f3f3f; font-size: 11px; max-height: 372px; overflow-y: auto; }
+  #furnrow { display: none; align-items: center; gap: 10px; }
+  #furnmid { width: 40px; }
+  #smeltbar, #burnbar { height: 8px; background: #8b8b8b; border: 1px solid #555; }
+  #smeltbar i { display: block; height: 100%; width: 0; background: #fff; }
+  #burnbar { height: 5px; margin-top: 6px; } #burnbar i { display: block; height: 100%; width: 0; background: #f08020; }
+  .note { white-space: normal; line-height: 1.6; margin-top: 8px; padding-top: 6px; border-top: 1px solid #999; max-width: 230px; }
   #recipes h2 { margin: 0 0 6px; font-size: 12px; }
   .rc { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; white-space: nowrap; }
   .rg { display: grid; gap: 1px; background: #8b8b8b; padding: 1px; }
@@ -86,10 +92,10 @@
 <div id="hud"></div>
 <div id="help">WASD 移動 / Space ジャンプ
 W 2回押し ダッシュ / Shift スニーク
-左クリック長押し 破壊 / 右クリック 設置
+左クリック 攻撃・長押しで破壊 / 右クリック 設置・使う・食べる
 1-9・ホイール 選択 / E インベントリ / Q 捨てる
 F 飛行(Space上昇・Shift下降) / Enter チャット
-T 時間を進める / 作業台は右クリックで開く
+T 時間を進める / 作業台・かまどは右クリックで開く
 [ ] 視野角を狭く/広く
 ダッシュでスタミナ消費 / 高所から落ちるとダメージ</div>
 <div id="names"></div>
@@ -107,6 +113,7 @@ T 時間を進める / 作業台は右クリックで開く
       <div><h2>手</h2><div id="hands" class="col"></div></div>
       <div id="craftbox"><h2 id="crafttitle">クラフト</h2>
         <div id="craftrow"><div id="craft"></div><div id="arrow">→</div><div class="slot" id="result"></div></div>
+        <div id="furnrow"><div id="furnin" class="col"></div><div id="furnmid"><div id="smeltbar"><i></i></div><div id="burnbar"><i></i></div></div><div id="furnout"></div></div>
       </div>
     </div>
     <h2>インベントリ</h2>
@@ -120,7 +127,7 @@ T 時間を進める / 作業台は右クリックで開く
   <h1>BlockCraft</h1>
   <input id="name" maxlength="16" placeholder="名前">
   <button id="go">ワールドに入る</button>
-  <p>WASD 移動 ・ マウス 視点 ・ Space ジャンプ ・ W 2回押しでダッシュ ・ Shift スニーク<br>左クリック長押し 破壊 ・ 右クリック 設置 ・ E インベントリ ・ Q 捨てる<br>Enter チャット ・ T 時間を進める ・ スマホ: 左でスティック移動、右で視点</p>
+  <p>WASD 移動 ・ マウス 視点 ・ Space ジャンプ ・ W 2回押しでダッシュ ・ Shift スニーク<br>左クリック長押し 破壊 ・ 右クリック 設置 ・ E インベントリ ・ Q 捨てる<br>左クリックで人やモブを攻撃 ・ 食べ物を持って右クリックで食べる<br>Enter チャット ・ T 時間を進める ・ スマホ: 左でスティック移動、右で視点</p>
 </div>
 <div id="lost"><div>サーバーとの接続が切れた</div><button onclick="location.reload()">入り直す</button></div>
 <div id="err">このブラウザは WebGL2 に対応していないため表示できません。</div>
@@ -130,9 +137,13 @@ T 時間を進める / 作業台は右クリックで開く
 const CS = 16, H = 64, SEA = 24, RD = 6, REACH = 5, STACK = 64;
 const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEAF = 7, SNOW = 8,
   BEDROCK = 9, ICE = 10, CACTUS = 11, SNOWGRASS = 12, PINELEAF = 13, SANDSTONE = 14,
-  COBBLE = 15, PLANKS = 16, TABLE = 17, COAL_ORE = 18, IRON_ORE = 19;
+  COBBLE = 15, PLANKS = 16, TABLE = 17, COAL_ORE = 18, IRON_ORE = 19,
+  GOLD_ORE = 20, DIAMOND_ORE = 21, FURNACE = 22, FARMLAND = 23,
+  TALLGRASS = 24, WHEAT0 = 25, WHEAT1 = 26, WHEAT2 = 27, WHEAT3 = 28;   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
-const STICK = 100, COAL = 101, WOOD_PICK = 110, WOOD_AXE = 111, WOOD_SHOVEL = 112, STONE_PICK = 113, STONE_AXE = 114, STONE_SHOVEL = 115;
+const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
+  RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126;
+// ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
 const DIRTC = [0.53, 0.38, 0.26];
@@ -158,27 +169,53 @@ HARD[LEAF] = 0.3; HARD[PINELEAF] = 0.3; HARD[SNOW] = 0.4; HARD[CACTUS] = 0.6; HA
 HARD[DIRT] = 0.8; HARD[ICE] = 0.8; HARD[GRASS] = 0.9; HARD[SNOWGRASS] = 0.9;
 HARD[LOG] = 2.0; HARD[SANDSTONE] = 2.5; HARD[STONE] = 3.0; HARD[BEDROCK] = Infinity;
 HARD[COBBLE] = 3.0; HARD[PLANKS] = 2.0; HARD[TABLE] = 2.5; HARD[COAL_ORE] = 4.0; HARD[IRON_ORE] = 4.5;
+HARD[GOLD_ORE] = 4.5; HARD[DIAMOND_ORE] = 5.0; HARD[FURNACE] = 3.5; HARD[FARMLAND] = 0.8;
+for (let b = TALLGRASS; b <= WHEAT3; b++) HARD[b] = 0.05;
+const isPlant = b => b >= TALLGRASS && b <= WHEAT3;
 Object.assign(NAME, { [COBBLE]: '丸石', [PLANKS]: '板材', [TABLE]: '作業台', [COAL_ORE]: '石炭鉱石', [IRON_ORE]: '鉄鉱石',
-  [STICK]: '棒', [COAL]: '石炭', [WOOD_PICK]: '木のツルハシ', [WOOD_AXE]: '木の斧', [WOOD_SHOVEL]: '木のシャベル',
-  [STONE_PICK]: '石のツルハシ', [STONE_AXE]: '石の斧', [STONE_SHOVEL]: '石のシャベル' });
+  [GOLD_ORE]: '金鉱石', [DIAMOND_ORE]: 'ダイヤ鉱石', [FURNACE]: 'かまど', [FARMLAND]: '耕した土', [TALLGRASS]: '草',
+  [WHEAT0]: '小麦', [WHEAT1]: '小麦', [WHEAT2]: '小麦', [WHEAT3]: '小麦（収穫できる）',
+  [STICK]: '棒', [COAL]: '石炭', [IRON_INGOT]: '鉄インゴット', [GOLD_INGOT]: '金インゴット', [DIAMOND]: 'ダイヤ',
+  [SEEDS]: '小麦の種', [WHEAT]: '小麦', [BREAD]: 'パン',
+  [RAW_PORK]: '生の豚肉', [COOKED_PORK]: '焼き豚', [RAW_BEEF]: '生の牛肉', [COOKED_BEEF]: 'ステーキ',
+  [RAW_CHICKEN]: '生の鶏肉', [COOKED_CHICKEN]: '焼き鳥', [ROTTEN]: '腐った肉' });
 COL[COBBLE] = [[0.43, 0.43, 0.45], [0.40, 0.40, 0.42], [0.40, 0.40, 0.42]];
 COL[PLANKS] = [[0.72, 0.56, 0.33], [0.68, 0.52, 0.30], [0.68, 0.52, 0.30]];
 COL[TABLE] = [[0.52, 0.34, 0.18], [0.63, 0.47, 0.27], [0.68, 0.52, 0.30]];
-COL[COAL_ORE] = COL[STONE];
+COL[COAL_ORE] = COL[STONE]; COL[GOLD_ORE] = COL[STONE]; COL[DIAMOND_ORE] = COL[STONE];
 COL[IRON_ORE] = [[0.58, 0.53, 0.50], [0.55, 0.50, 0.47], [0.55, 0.50, 0.47]];
-const ORE_K = { [COAL_ORE]: 2, [IRON_ORE]: 3 };   // シェーダーで鉱石の粒を描く目印
-// ツール: 種類・ランク・耐久
-const TOOLS = {
-  [WOOD_PICK]: { type: 'pick', tier: 1, dur: 60 }, [WOOD_AXE]: { type: 'axe', tier: 1, dur: 60 }, [WOOD_SHOVEL]: { type: 'shovel', tier: 1, dur: 60 },
-  [STONE_PICK]: { type: 'pick', tier: 2, dur: 132 }, [STONE_AXE]: { type: 'axe', tier: 2, dur: 132 }, [STONE_SHOVEL]: { type: 'shovel', tier: 2, dur: 132 },
-};
+COL[FURNACE] = [[0.27, 0.27, 0.29], [0.34, 0.34, 0.36], [0.27, 0.27, 0.29]];
+COL[FARMLAND] = [[0.34, 0.22, 0.13], DIRTC, DIRTC];
+for (let b = TALLGRASS; b <= WHEAT3; b++) COL[b] = COL[GRASS];
+const ORE_K = { [COAL_ORE]: 2, [IRON_ORE]: 3, [GOLD_ORE]: 4, [DIAMOND_ORE]: 5 };   // シェーダーで鉱石の粒を描く目印
+// ツール: ランク（素材）× 種類。speed=合ったブロックを壊す倍率、lvl=掘れる鉱石のランク、dur=耐久
+const TIERS = [
+  { name: '木', mat: PLANKS, speed: 2, dur: 60, lvl: 1, atk: 0, pal: [[176, 132, 76], [128, 92, 50]] },
+  { name: '石', mat: COBBLE, speed: 4, dur: 132, lvl: 2, atk: 1, pal: [[156, 156, 162], [104, 104, 110]] },
+  { name: '鉄', mat: IRON_INGOT, speed: 6, dur: 251, lvl: 3, atk: 2, pal: [[228, 228, 232], [160, 160, 170]] },
+  { name: '金', mat: GOLD_INGOT, speed: 12, dur: 33, lvl: 1, atk: 0, pal: [[250, 216, 72], [198, 150, 30]] },
+  { name: 'ダイヤ', mat: DIAMOND, speed: 8, dur: 1562, lvl: 4, atk: 3, pal: [[98, 232, 226], [40, 168, 172]] },
+];
+const TYPES = [['pick', 'のツルハシ', 2], ['axe', 'の斧', 3], ['shovel', 'のシャベル', 2], ['sword', 'の剣', 4], ['hoe', 'のクワ', 1]];   // [種類, 名前, 基本攻撃力]
+const toolId = (tier, type) => 200 + tier * 10 + type;
+const TOOLS = {};
+TIERS.forEach((T, ti) => TYPES.forEach(([type, label, base], yi) => {
+  const id = toolId(ti, yi);
+  TOOLS[id] = { type, tier: ti, speed: T.speed, dur: T.dur, lvl: T.lvl, dmg: base + T.atk };
+  NAME[id] = T.name + label;
+}));
+// 食べ物（回復する体力）、かまど（材料→できる物）、燃料（何個ぶん焼けるか）
+const FOOD = { [BREAD]: 5, [COOKED_PORK]: 8, [COOKED_BEEF]: 8, [COOKED_CHICKEN]: 6, [RAW_PORK]: 3, [RAW_BEEF]: 3, [RAW_CHICKEN]: 2, [ROTTEN]: 1 };
+const SMELT = { [IRON_ORE]: IRON_INGOT, [GOLD_ORE]: GOLD_INGOT, [COBBLE]: STONE, [LOG]: COAL,
+  [RAW_PORK]: COOKED_PORK, [RAW_BEEF]: COOKED_BEEF, [RAW_CHICKEN]: COOKED_CHICKEN };
+const FUEL = { [COAL]: 8, [LOG]: 1.5, [PLANKS]: 1.5, [STICK]: 0.5 };
 // どのツールで速く壊せるか
 const TOOL_FOR = {};
-for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, ICE]) TOOL_FOR[b] = 'pick';
+for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, FURNACE, ICE]) TOOL_FOR[b] = 'pick';
 for (const b of [LOG, PLANKS, TABLE]) TOOL_FOR[b] = 'axe';
-for (const b of [DIRT, GRASS, SAND, SNOW, SNOWGRASS]) TOOL_FOR[b] = 'shovel';
-// ツルハシが無いとアイテムを落とさないブロック（値は必要なランク）
-const NEED_PICK = { [STONE]: 1, [COBBLE]: 1, [SANDSTONE]: 1, [COAL_ORE]: 1, [IRON_ORE]: 2 };
+for (const b of [DIRT, GRASS, SAND, SNOW, SNOWGRASS, FARMLAND]) TOOL_FOR[b] = 'shovel';
+// ツルハシが無いとアイテムを落とさないブロック（値は必要なランク: 1=木・金, 2=石, 3=鉄, 4=ダイヤ）
+const NEED_PICK = { [STONE]: 1, [COBBLE]: 1, [SANDSTONE]: 1, [COAL_ORE]: 1, [FURNACE]: 1, [IRON_ORE]: 2, [GOLD_ORE]: 3, [DIAMOND_ORE]: 3 };
 const SKY = [0.56, 0.77, 0.95];
 
 // ---------- ノイズ・バイオーム ----------
@@ -296,6 +333,8 @@ function genChunk(cx, cz) {
   };
   vein(COAL_ORE, 9, 4, 52, 8);
   vein(IRON_ORE, 6, 2, 30, 5);
+  vein(GOLD_ORE, 3, 2, 20, 5);
+  vein(DIAMOND_ORE, 2, 1, 12, 3);
   const put = (bx, by, bz, b, force) => {
     if (bx < 0 || bx >= CS || bz < 0 || bz >= CS || by >= H) return;
     const i = (by * CS + bz) * CS + bx;
@@ -331,6 +370,12 @@ function genChunk(cx, cz) {
       const th = 2 + Math.floor(r1 * 2);
       for (let dy = 1; dy <= th; dy++) put(lx, h + dy, lz, CACTUS, true);
     }
+  }
+  // 草: 草ブロックの上に一定確率で生える
+  for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+    const h = hm[(z + M) * W + x + M];
+    if (h + 1 < H && d[(h * CS + z) * CS + x] === GRASS && d[((h + 1) * CS + z) * CS + x] === AIR
+      && hash(cx * CS + x, cz * CS + z, 95) < (d.bio[z * CS + x] === B_PLAINS ? 0.16 : 0.08)) d[((h + 1) * CS + z) * CS + x] = TALLGRASS;
   }
   const e = edits.get(ckey(cx, cz));
   if (e) for (const [i, b] of e) d[i] = b;
@@ -375,7 +420,7 @@ function setBlock(x, y, z, b) {
     if (m) { freeMesh(m); meshes.set(k2, buildMesh(m.cx, m.cz)); }
   }
 }
-const opaque = b => b !== AIR && b !== WATER;
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= WHEAT3);   // 植物は空気と同じ扱い（すり抜ける・光を通す）
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -394,6 +439,23 @@ const CORNERS = [
 const SHADE = [0.82, 0.82, 1.0, 0.55, 0.68, 0.68];
 const TAN = [[1, 2], [1, 2], [0, 2], [0, 2], [0, 1], [0, 1]];
 const FCI = [1, 1, 0, 2, 1, 1];   // 面 → 色インデックス
+// 草と小麦は、細い三角の葉を何枚か立てて作る（両面から見えるよう裏表2枚ずつ）
+const WHEAT_COL = [[0.40, 0.70, 0.25], [0.42, 0.70, 0.24], [0.58, 0.72, 0.24], [0.88, 0.72, 0.26]];
+function plantMesh(V, I, b, wx, y, wz, bi, lt) {
+  const wheat = b >= WHEAT0, st = b - WHEAT0;
+  const n = wheat ? 9 : 6, hgt = wheat ? [0.22, 0.42, 0.62, 0.9][st] : 0.75, col = wheat ? WHEAT_COL[st] : GTINT[bi][0];
+  for (let i = 0; i < n; i++) {
+    const r1 = hash3(wx, y, wz, 700 + i), r2 = hash3(wx, y, wz, 720 + i), r3 = hash3(wx, y, wz, 740 + i);
+    const bx = wheat ? 0.2 + (i % 3) * 0.3 + (r1 - 0.5) * 0.1 : 0.15 + r1 * 0.7;
+    const bz = wheat ? 0.2 + Math.floor(i / 3) * 0.3 + (r2 - 0.5) * 0.1 : 0.15 + r2 * 0.7;
+    const ang = r3 * Math.PI, dx = Math.cos(ang) * 0.07, dz = Math.sin(ang) * 0.07;
+    const h = hgt * (0.65 + r3 * 0.35), l = lt * (0.78 + r1 * 0.28), lean = (r2 - 0.5) * 0.25, base = V.length / 9;
+    V.push(wx + bx - dx, y, wz + bz - dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, 0, 0);
+    V.push(wx + bx + dx, y, wz + bz + dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, 0, 0);
+    V.push(wx + bx + lean, y + h, wz + bz + lean, col[0] * l, col[1] * l, col[2] * l, 0, 0, 0);
+    I.push(base, base + 1, base + 2, base, base + 2, base + 1);
+  }
+}
 function buildMesh(cx, cz) {
   const d = getChunk(cx, cz);
   const ov = [], oi = [], wv = [], wi = [];
@@ -402,6 +464,11 @@ function buildMesh(cx, cz) {
   for (let y = 0; y < H; y++) for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
+    if (isPlant(b)) {
+      const tp = d.top[z * CS + x];
+      plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
+      continue;
+    }
     const isW = b === WATER, bi = d.bio[z * CS + x];
     for (let f = 0; f < 6; f++) {
       const D = DIRS[f], nx = x + D[0], ny = y + D[1], nz = z + D[2];
@@ -467,7 +534,7 @@ void main(){
   if (k > 1.5) {
     vec3 q = mod(floor((vW - N*0.01)*4.0), 64.0);
     float m = fract(sin(dot(q, vec3(41.3,17.7,93.1)))*9173.3);
-    if (m > 0.72) c = (k < 2.5 ? vec3(0.09,0.09,0.10) : vec3(0.88,0.64,0.46)) * dot(vCol, vec3(0.66));
+    if (m > 0.72) c = (k < 2.5 ? vec3(0.09,0.09,0.10) : k < 3.5 ? vec3(0.88,0.64,0.46) : k < 4.5 ? vec3(0.99,0.84,0.20) : vec3(0.36,0.94,0.90)) * dot(vCol, vec3(0.66));
   }
   c *= uLight;
   float f = clamp((vDist-uFog.x)/(uFog.y-uFog.x), 0.0, 1.0);
@@ -573,30 +640,70 @@ const SPR = {}, SPR_IDS = [];
     fn((x, y, c) => { if (x < 0 || x > 15 || y < 0 || y > 15) return; const o = (y * 16 + x) * 4; a[o] = c[0]; a[o + 1] = c[1]; a[o + 2] = c[2]; a[o + 3] = 255; });
     SPR[id] = a; SPR_IDS.push(id);
   };
-  const HAN = [[128, 90, 48], [88, 60, 30]], WOOD = [[176, 132, 76], [128, 92, 50]], STN = [[156, 156, 162], [104, 104, 110]];
+  const each = fn => { for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) fn(x, y); };
+  const HAN = [[128, 90, 48], [88, 60, 30]];
   const handle = (set, x0, y0, n) => { for (let i = 0; i < n; i++) { set(x0 + i, y0 - i, HAN[0]); set(x0 + i + 1, y0 - i, HAN[1]); } };
   mk(STICK, set => handle(set, 3, 12, 9));
   mk(COAL, set => {
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if ((x - 7.5) ** 2 + (y - 8) ** 2 < 20) set(x, y, [36, 36, 40]);
+    each((x, y) => { if ((x - 7.5) ** 2 + (y - 8) ** 2 < 20) set(x, y, [36, 36, 40]); });
     for (const [x, y] of [[6, 6], [9, 7], [7, 10], [10, 10], [5, 9], [8, 5]]) set(x, y, [78, 78, 86]);
   });
-  const pick = m => set => {
-    handle(set, 2, 13, 8);
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const dd = Math.hypot(x - 4.5, y - 10.5);
-      if (dd >= 7 && dd < 9.2 && x >= 5 && y <= 10) set(x, y, dd > 8.2 ? m[1] : m[0]);
-    }
+  const ingot = (c, dk, hi) => set => {   // 斜めから見た延べ棒
+    for (let y = 5; y <= 10; y++) for (let x = 2; x <= 12; x++) set(x + (y < 8 ? 1 : 0), y, y === 5 ? hi : y >= 9 ? dk : c);
   };
-  const axe = m => set => {
-    for (let y = 1; y < 10; y++) for (let x = 7; x < 15; x++) if ((x - 10.5) ** 2 / 9 + (y - 5) ** 2 / 13 < 1) set(x, y, x + y < 14 ? m[1] : m[0]);
-    handle(set, 2, 13, 9);
+  mk(IRON_INGOT, ingot([214, 214, 220], [150, 150, 160], [245, 245, 250]));
+  mk(GOLD_INGOT, ingot([246, 206, 60], [190, 140, 24], [255, 240, 150]));
+  mk(DIAMOND, set => {
+    each((x, y) => { const d = Math.abs(x - 7.5) + Math.abs(y - 8) * 0.9; if (d < 6) set(x, y, d < 2.2 ? [200, 255, 250] : x + y < 15 ? [110, 236, 230] : [48, 176, 180]); });
+  });
+  mk(SEEDS, set => { for (const [x, y] of [[4, 6], [8, 4], [11, 7], [6, 10], [10, 11], [7, 7]]) { set(x, y, [120, 160, 60]); set(x + 1, y, [84, 120, 40]); set(x, y + 1, [84, 120, 40]); } });
+  mk(WHEAT, set => {
+    for (const k of [-3, 0, 3]) for (let i = 0; i < 9; i++) set(4 + i + (k > 0 ? k : 0), 12 - i + (k < 0 ? k : 0), i > 4 ? [232, 196, 72] : [196, 160, 60]);
+    for (let i = 0; i < 4; i++) set(4 + i, 9 + i, [150, 90, 40]);
+  });
+  mk(BREAD, set => {
+    each((x, y) => { if ((x - 7.5) ** 2 / 38 + (y - 8.5) ** 2 / 11 < 1) set(x, y, y < 8 ? [206, 150, 78] : [168, 112, 52]); });
+    for (const x of [5, 8, 11]) { set(x, 6, [232, 190, 120]); set(x - 1, 7, [232, 190, 120]); }
+  });
+  const steak = (c, fat) => set => {
+    each((x, y) => { if ((x - 7.5) ** 2 / 34 + (y - 8) ** 2 / 17 < 1) set(x, y, c); });
+    for (const [x, y] of [[5, 7], [6, 7], [6, 8], [10, 9], [11, 9], [9, 6]]) set(x, y, fat);
   };
-  const shovel = m => set => {
-    handle(set, 3, 12, 7);
-    for (let y = 2; y <= 6; y++) for (let x = 9; x <= 13; x++) if (!((x === 9 && y === 2) || (x === 13 && y === 6))) set(x, y, x - y >= 9 ? m[1] : m[0]);
+  const drum = c => set => {
+    each((x, y) => { if ((x - 9.5) ** 2 + (y - 6) ** 2 < 17) set(x, y, c); });
+    for (let i = 0; i < 4; i++) { set(5 - i, 10 + i, [240, 236, 226]); set(6 - i, 10 + i, [240, 236, 226]); }
+    set(1, 14, [240, 236, 226]); set(2, 15, [240, 236, 226]);
   };
-  mk(WOOD_PICK, pick(WOOD)); mk(WOOD_AXE, axe(WOOD)); mk(WOOD_SHOVEL, shovel(WOOD));
-  mk(STONE_PICK, pick(STN)); mk(STONE_AXE, axe(STN)); mk(STONE_SHOVEL, shovel(STN));
+  mk(RAW_PORK, steak([236, 150, 150], [250, 214, 214])); mk(COOKED_PORK, steak([186, 126, 78], [226, 180, 130]));
+  mk(RAW_BEEF, steak([196, 60, 56], [240, 200, 196])); mk(COOKED_BEEF, steak([120, 70, 40], [170, 116, 76]));
+  mk(RAW_CHICKEN, drum([240, 196, 176])); mk(COOKED_CHICKEN, drum([198, 132, 62]));
+  mk(ROTTEN, steak([120, 132, 70], [84, 60, 44]));
+  // ツール（素材の色だけ変えて使い回す）
+  const DRAW = [
+    m => set => {   // ツルハシ
+      handle(set, 2, 13, 8);
+      each((x, y) => { const dd = Math.hypot(x - 4.5, y - 10.5); if (dd >= 7 && dd < 9.2 && x >= 5 && y <= 10) set(x, y, dd > 8.2 ? m[1] : m[0]); });
+    },
+    m => set => {   // 斧
+      for (let y = 1; y < 10; y++) for (let x = 7; x < 15; x++) if ((x - 10.5) ** 2 / 9 + (y - 5) ** 2 / 13 < 1) set(x, y, x + y < 14 ? m[1] : m[0]);
+      handle(set, 2, 13, 9);
+    },
+    m => set => {   // シャベル
+      handle(set, 3, 12, 7);
+      for (let y = 2; y <= 6; y++) for (let x = 9; x <= 13; x++) if (!((x === 9 && y === 2) || (x === 13 && y === 6))) set(x, y, x - y >= 9 ? m[1] : m[0]);
+    },
+    m => set => {   // 剣
+      for (let i = 0; i < 9; i++) { set(5 + i, 10 - i, m[0]); set(6 + i, 10 - i, m[1]); set(5 + i, 9 - i, m[0]); }
+      for (const [x, y] of [[2, 8], [3, 9], [4, 10], [5, 11], [6, 12], [7, 13]]) set(x, y, [70, 58, 46]);
+      set(3, 12, HAN[0]); set(2, 13, HAN[0]); set(1, 14, HAN[1]); set(3, 11, HAN[0]); set(4, 12, HAN[1]);
+    },
+    m => set => {   // クワ
+      handle(set, 2, 13, 9);
+      for (let x = 6; x <= 12; x++) { set(x, 3, m[0]); set(x, 4, m[1]); }
+      set(6, 5, m[1]); set(6, 6, m[1]);
+    },
+  ];
+  TIERS.forEach((T, ti) => DRAW.forEach((fn, yi) => mk(toolId(ti, yi), fn(T.pal))));
 }
 const sprTex = gl.createTexture();
 {
@@ -657,7 +764,7 @@ function mvp(ex, ey, ez, yaw, pitch, aspect) {
 const PW = 0.3, PH = 1.8, EYE = 1.62, EPS = 1e-4;
 const P = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, ground: false, blocked: false, fly: false,
   hp: 20, st: 20, tired: false, rest: 0, regen: 0, land: 0,
-  sprint: false, sneak: false, edge: false, crouch: 0 };
+  sprint: false, sneak: false, edge: false, crouch: 0, kbx: 0, kbz: 0, inv: 0 };
 const eyeY = () => P.y + EYE - P.crouch * 0.14;
 function spawn() {
   let x = 8, z = 8;
@@ -667,8 +774,9 @@ function spawn() {
   while (y > 0 && !opaque(getBlock(x, y, z))) y--;
   P.y = y + 1;
 }
-function collides(x, y, z) {
-  const x0 = Math.floor(x - PW), x1 = Math.floor(x + PW), y0 = Math.floor(y), y1 = Math.floor(y + PH), z0 = Math.floor(z - PW), z1 = Math.floor(z + PW);
+const collides = (x, y, z) => boxHit(x, y, z, PW, PH);
+function boxHit(x, y, z, w, h) {   // 幅(半分)w・高さh の箱がブロックにめり込むか
+  const x0 = Math.floor(x - w), x1 = Math.floor(x + w), y0 = Math.floor(y), y1 = Math.floor(y + h), z0 = Math.floor(z - w), z1 = Math.floor(z + w);
   for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++)
     if (opaque(getBlock(bx, by, bz))) return true;
   return false;
@@ -719,8 +827,10 @@ function update(dt) {
   P.edge = P.sneak && P.ground;
   P.crouch += ((P.sneak ? 1 : 0) - P.crouch) * Math.min(1, dt * 14);
   const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
-  P.vx = (-sy * iz + cy * ix) * sp;
-  P.vz = (-cy * iz - sy * ix) * sp;
+  // 殴られた時の吹き飛びを足す（すぐ弱まる）
+  const kdec = Math.exp(-6 * dt); P.kbx *= kdec; P.kbz *= kdec; P.inv -= dt;
+  P.vx = (-sy * iz + cy * ix) * sp + P.kbx;
+  P.vz = (-cy * iz - sy * ix) * sp + P.kbz;
   if (P.fly) P.vy = ((jump ? 1 : 0) - (shift ? 1 : 0)) * 10;
   else if (inWater) P.vy = jump ? (P.blocked ? 9 : 3.2) : Math.max(P.vy - 8 * dt, -3);
   else { P.vy = Math.max(P.vy - 26 * dt, -50); if (jump && P.ground) { P.vy = 8.4; if (sprint) drain(0.3); } }
@@ -734,13 +844,14 @@ function update(dt) {
 
 // ---------- 体力・スタミナ（どちらも 20 = アイコン10個、1個で2ポイント） ----------
 function drain(v) { P.st = Math.max(0, P.st - v); P.rest = 0; if (P.st <= 0) P.tired = true; }
-function damage(v) {
+function damage(v, cause) {
   if (v <= 0) return;
   P.hp = Math.max(0, P.hp - v); P.regen = 0;
   hurtEl.style.transition = 'none'; hurtEl.style.opacity = 0.35;
   requestAnimationFrame(() => { hurtEl.style.transition = ''; hurtEl.style.opacity = 0; });
   if (P.hp <= 0) {
-    P.hp = 20; P.st = 20; P.tired = false; spawn();
+    P.hp = 20; P.st = 20; P.tired = false; P.kbx = P.kbz = 0; spawn();
+    send({ t: 'died', cause: cause || '' });
     toastEl.textContent = '力尽きた…… スタート地点に戻った'; toastEl.style.opacity = 1;
     setTimeout(() => { toastEl.style.opacity = 0; }, 2200);
   }
@@ -748,7 +859,7 @@ function damage(v) {
 }
 function updateStats(dt) {
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
-  if (P.land > 0) { if (!P.fly && !inWater) damage(Math.floor(P.land * P.land / 52 - 2.5)); P.land = 0; }
+  if (P.land > 0) { if (!P.fly && !inWater) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
   // スタミナ: ダッシュをやめて1秒たつと回復。使い切ると4まで戻るまでダッシュ不可
   P.rest += dt;
   if (P.rest > 1 && P.st < 20) P.st = Math.min(20, P.st + 3 * dt);
@@ -781,7 +892,7 @@ function raycast(maxD) {
   let px = x, py = y, pz = z, t = 0;
   while (t <= maxD) {
     const b = getBlock(x, y, z);
-    if (opaque(b)) return { x, y, z, px, py, pz, b };
+    if (opaque(b) || isPlant(b)) return { x, y, z, px, py, pz, b, t };
     px = x; py = y; pz = z;
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; }
@@ -789,19 +900,37 @@ function raycast(maxD) {
   }
   return null;
 }
-let target = null, breakT = 0, breakKey = '', placeCd = 0, breakProg = 0;
+let target = null, breakT = 0, breakKey = '', placeCd = 0, breakProg = 0, noBreak = false, atkCd = 0;
 const heldTool = () => { const s = slots[sel]; return s && TOOLS[s.b] ? TOOLS[s.b] : null; };
-// 合ったツールなら 木=2倍速、石=4倍速
-function breakTime(b, tool) { return HARD[b] / (tool && TOOL_FOR[b] === tool.type ? (tool.tier === 1 ? 2 : 4) : 1); }
-function dropOf(b, tool) {
+// 合ったツールなら速く壊せる（木2倍・石4倍・鉄6倍・ダイヤ8倍・金12倍）
+function breakTime(b, tool) { return HARD[b] / (tool && TOOL_FOR[b] === tool.type ? tool.speed : 1); }
+// 壊した時に落とすアイテム（複数あり得るので配列）
+function dropsOf(b, tool) {
   const need = NEED_PICK[b];
-  if (need && !(tool && tool.type === 'pick' && tool.tier >= need)) return 0;
-  return (b === GRASS || b === SNOWGRASS) ? DIRT : b === STONE ? COBBLE : b === COAL_ORE ? COAL : b;
+  if (need && !(tool && tool.type === 'pick' && tool.lvl >= need)) return [];
+  if (b === TALLGRASS) return Math.random() < 0.15 ? [SEEDS] : [];          // 草: 15% で種
+  if (b === WHEAT3) return Math.random() < 0.5 ? [WHEAT, SEEDS, SEEDS] : [WHEAT, SEEDS];
+  if (b >= WHEAT0 && b < WHEAT3) return [SEEDS];
+  if (b === GRASS || b === SNOWGRASS || b === FARMLAND) return [DIRT];
+  if (b === STONE) return [COBBLE];
+  if (b === COAL_ORE) return [COAL];
+  if (b === DIAMOND_ORE) return [DIAMOND];
+  return [b];
+}
+function breakBlock(x, y, z, b, tool) {
+  netSet(x, y, z, AIR, b, dropsOf(b, tool));
+  const up = getBlock(x, y + 1, z);
+  if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));   // 上に生えていた植物も一緒に壊れる
+}
+function useTool() {   // 手に持っているツールの耐久を1減らす
+  const s = slots[sel];
+  if (s && TOOLS[s.b]) { if (--s.d <= 0) slots[sel] = null; refreshUI(); }
 }
 function tryPlace() {
   const st = slots[sel];
   if (!target || !st || st.b >= 100) return;
-  const { px: x, py: y, pz: z } = target;
+  // 草などを狙っている時は、その場所に置き換える
+  const x = isPlant(target.b) ? target.x : target.px, y = isPlant(target.b) ? target.y : target.py, z = isPlant(target.b) ? target.z : target.pz;
   if (y < 0 || y >= H || opaque(getBlock(x, y, z))) return;
   // プレイヤーと重なる位置には置けない
   if (x + 1 > P.x - PW && x < P.x + PW && z + 1 > P.z - PW && z < P.z + PW && y + 1 > P.y && y < P.y + PH) return;
@@ -809,28 +938,49 @@ function tryPlace() {
   if (--st.n <= 0) slots[sel] = null;
   refreshUI();
 }
-function useTarget() {   // 右クリック: 作業台なら開く（スニーク中は普通に設置）
+// 右クリック: 作業台・かまどを開く → 食べる → クワで耕す → 種を植える → ブロックを置く の順で判定
+function useItem() {
+  const st = slots[sel];
+  if (target && !P.sneak && (target.b === TABLE || target.b === FURNACE)) { mouse.r = false; openInv(target.b === TABLE ? 3 : 'furnace'); return; }
+  if (st && FOOD[st.b]) {
+    if (P.hp < 20) { P.hp = Math.min(20, P.hp + FOOD[st.b]); if (--st.n <= 0) slots[sel] = null; refreshUI(); drawStats(); placeCd = 0.6; }
+    return;
+  }
   if (!target) return;
-  if (target.b === TABLE && !P.sneak) { mouse.r = false; openInv(3); return; }
+  const { x, y, z } = target;
+  if (st && TOOLS[st.b] && TOOLS[st.b].type === 'hoe' && (target.b === GRASS || target.b === DIRT)) {
+    const up = getBlock(x, y + 1, z);
+    if (opaque(up) || up === WATER) return;
+    if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
+    netSet(x, y, z, FARMLAND, target.b);
+    useTool();
+    return;
+  }
+  if (st && st.b === SEEDS) {
+    if (target.b !== FARMLAND || y + 1 >= H || getBlock(x, y + 1, z) !== AIR) return;
+    netSet(x, y + 1, z, WHEAT0, AIR);
+    if (--st.n <= 0) slots[sel] = null;
+    refreshUI();
+    return;
+  }
   tryPlace();
 }
 function updateInteract(dt) {
   target = active() ? raycast(REACH) : null;
-  placeCd -= dt;
+  placeCd -= dt; atkCd -= dt;
   let prog = 0;
-  if (target && mouse.l) {
+  if (target && mouse.l && !noBreak) {
     const k = target.x + ',' + target.y + ',' + target.z;
     if (k !== breakKey) { breakKey = k; breakT = 0; }
     breakT += dt;
     const tool = heldTool(), need = breakTime(target.b, tool);
     if (breakT >= need) {
-      const drop = dropOf(target.b, tool);
-      netSet(target.x, target.y, target.z, AIR, target.b, drop);   // ドロップはサーバーが出す
-      if (tool) { const s = slots[sel]; if (--s.d <= 0) slots[sel] = null; refreshUI(); }   // 耐久を1減らす
+      breakBlock(target.x, target.y, target.z, target.b, tool);   // ドロップはサーバーが出す
+      if (tool && !isPlant(target.b)) useTool();
       breakT = 0; breakKey = '';
     } else if (need < Infinity) prog = breakT / need;
   } else { breakT = 0; breakKey = ''; }
-  if (target && mouse.r && placeCd <= 0) { useTarget(); placeCd = 0.25; }
+  if (mouse.r && placeCd <= 0 && active()) { placeCd = 0.25; useItem(); }
   breakProg = prog;
 }
 
@@ -974,11 +1124,12 @@ function drawOutline() {
 }
 
 // ---------- インベントリ・クラフト ----------
-// 0-8 ホットバー / 9-35 収納 / 36-39 防具 / 40-41 手 / 42-50 クラフト(3x3。手持ちクラフトは左上2x2だけ使う)
-const slots = new Array(51).fill(null);
+// 0-8 ホットバー / 9-35 収納 / 36-39 防具 / 40-41 手 / 42-50 クラフト(3x3。手持ちクラフトは左上2x2だけ使う) / 51 かまど材料 / 52 燃料 / 53 かまど完成品
+const slots = new Array(54).fill(null);
 const HOTBAR = [...Array(9).keys()], STORE = [...Array(27).keys()].map(i => i + 9);
 const INV_ORDER = HOTBAR.concat(STORE), CRAFT = [...Array(9).keys()].map(i => i + 42), CRAFT2 = [42, 43, 45, 46];
-let sel = 0, held = null, craftSize = 2;
+const FURN = [51, 52, 53];
+let sel = 0, held = null, craftSize = 2, station = 2, burn = 0, smeltT = 0;
 const maxStack = b => TOOLS[b] ? 1 : STACK;
 function insert(st, order) {   // 入りきらなかった数を返す
   const mx = maxStack(st.b);
@@ -995,10 +1146,10 @@ const RECIPES = [
   { p: ['PP', 'PP'], k: { P: PLANKS }, out: [TABLE, 1] },
   { p: ['SS', 'SS'], k: { S: SAND }, out: [SANDSTONE, 1] },
 ];
-for (const [m, pk, ax, sh] of [[PLANKS, WOOD_PICK, WOOD_AXE, WOOD_SHOVEL], [COBBLE, STONE_PICK, STONE_AXE, STONE_SHOVEL]]) {
-  const k = { M: m, S: STICK };
-  RECIPES.push({ p: ['MMM', ' S ', ' S '], k, out: [pk, 1] }, { p: ['MM', 'MS', ' S'], k, out: [ax, 1] }, { p: ['M', 'S', 'S'], k, out: [sh, 1] });
-}
+RECIPES.push({ p: ['CCC', 'C C', 'CCC'], k: { C: COBBLE }, out: [FURNACE, 1] }, { p: ['WWW'], k: { W: WHEAT }, out: [BREAD, 1] });
+// ツール: ツルハシ・斧・シャベル・剣・クワ × 5素材
+const TOOL_PAT = [['MMM', ' S ', ' S '], ['MM', 'MS', ' S'], ['M', 'S', 'S'], ['M', 'M', 'S'], ['MM', ' S', ' S']];
+TIERS.forEach((T, ti) => TOOL_PAT.forEach((p, yi) => RECIPES.push({ p, k: { M: T.mat, S: STICK }, out: [toolId(ti, yi), 1], hide: ti > 0 })));
 function craftResult() {
   const n = craftSize, g = [];
   let x0 = n, y0 = n, x1 = -1, y1 = -1;
@@ -1064,7 +1215,7 @@ function icon(b) {
   face([5, 18, 32, 31, 32, 60, 5, 47], rgb(side, 0.86));
   face([59, 18, 32, 31, 32, 60, 59, 47], rgb(side, 0.62));
   if (ORE_K[b]) {   // 鉱石の粒
-    g.fillStyle = b === COAL_ORE ? '#17171a' : '#dba377';
+    g.fillStyle = { [COAL_ORE]: '#17171a', [IRON_ORE]: '#dba377', [GOLD_ORE]: '#fcd633', [DIAMOND_ORE]: '#5cf0e6' }[b];
     for (const [x, y] of [[14, 30], [22, 44], [12, 42], [40, 36], [50, 28], [44, 48], [26, 14], [36, 20], [40, 12]]) g.fillRect(x, y, 6, 5);
   }
   return icons[b] = c.toDataURL();
@@ -1081,6 +1232,7 @@ function mkSlot(i, parent, label) {
 CRAFT.forEach(i => mkSlot(i, $('craft')));
 STORE.forEach(i => mkSlot(i, $('main')));
 HOTBAR.forEach(i => mkSlot(i, $('bar')));
+mkSlot(51, $('furnin'), '材料'); mkSlot(52, $('furnin'), '燃料'); mkSlot(53, $('furnout'));
 HOTBAR.forEach(i => {
   const el = document.createElement('div'); el.className = 'slot';
   el.addEventListener('pointerdown', e => { e.preventDefault(); sel = i; refreshUI(); });
@@ -1088,6 +1240,7 @@ HOTBAR.forEach(i => {
 });
 // レシピ一覧
 for (const R of RECIPES) {
+  if (R.hide) continue;
   const row = document.createElement('div'); row.className = 'rc';
   const grid = document.createElement('div'); grid.className = 'rg';
   grid.style.gridTemplateColumns = `repeat(${R.p[0].length}, 15px)`;
@@ -1100,6 +1253,11 @@ for (const R of RECIPES) {
   txt.innerHTML = `→ <img src="${icon(R.out[0])}" alt="" style="width:18px;height:18px;vertical-align:middle"> ${NAME[R.out[0]]}${R.out[1] > 1 ? ' ×' + R.out[1] : ''}${R.p.length > 2 || R.p[0].length > 2 ? '（作業台）' : ''}`;
   row.appendChild(grid); row.appendChild(txt); $('recipes').appendChild(row);
 }
+for (const text of ['ツールは板材を 丸石・鉄インゴット・金インゴット・ダイヤ に変えると上位版になる。',
+  'かまど（材料＋燃料）: 鉄鉱石→鉄 / 金鉱石→金 / 丸石→石 / 原木→石炭 / 生肉→焼いた肉。燃料は石炭・原木・板材・棒。',
+  '農業: クワで草ブロックか土を右クリック → 種を植える → 金色になったら収穫。']) {
+  const n = document.createElement('div'); n.className = 'note'; n.textContent = text; $('recipes').appendChild(n);
+}
 function html(st) {
   if (!st) return '';
   const t = TOOLS[st.b];
@@ -1108,13 +1266,21 @@ function html(st) {
 }
 const heldEl = $('held'), invEl = $('inv'), resEl = $('result');
 function refreshUI() {
-  for (let i = 0; i < 51; i++) { slotEls[i].innerHTML = html(slots[i]); slotEls[i].title = slots[i] ? NAME[slots[i].b] : ''; }
+  for (let i = 0; i < 54; i++) { slotEls[i].innerHTML = html(slots[i]); slotEls[i].title = slots[i] ? NAME[slots[i].b] : ''; }
   for (let i = 0; i < 9; i++) { hudEls[i].innerHTML = html(slots[i]); hudEls[i].classList.toggle('sel', i === sel); }
   const out = craftResult();
   resEl.innerHTML = out ? html({ b: out[0], n: out[1] }) : ''; resEl.title = out ? NAME[out[0]] : '';
   heldEl.innerHTML = html(held); heldEl.style.display = held ? 'block' : 'none';
 }
 function slotClick(i, right, shift) {
+  if (i === 53) {   // かまどの完成品は取り出すだけ
+    const o = slots[53];
+    if (!o) return;
+    if (shift) { if (insert(o, STORE.concat(HOTBAR)) <= 0) slots[53] = null; }
+    else if (!held) { held = o; slots[53] = null; }
+    else if (held.b === o.b && held.n + o.n <= maxStack(o.b)) { held.n += o.n; slots[53] = null; }
+    refreshUI(); return;
+  }
   const s = slots[i], merge = s && held && s.b === held.b && maxStack(s.b) > 1;
   if (shift) {
     if (!s) return;
@@ -1150,7 +1316,7 @@ invEl.addEventListener('mousedown', e => {
 let drag = null;
 function canTake(i) {
   const s = slots[i];
-  return !slotEls[i].classList.contains('hid') && (!s || (s.b === held.b && maxStack(s.b) > 1 && s.n < STACK));
+  return i !== 53 && !slotEls[i].classList.contains('hid') && (!s || (s.b === held.b && maxStack(s.b) > 1 && s.n < STACK));
 }
 function dragAdd(i) {
   if (drag.snap.has(i) || drag.list.length >= drag.held0.n) return;   // 手持ちの数より多い枠には広げられない
@@ -1173,16 +1339,19 @@ invEl.addEventListener('mouseover', e => {
   const el = e.target.closest ? e.target.closest('.slot') : null;
   if (!el || el.dataset.i === undefined) return;
   const i = +el.dataset.i, s = slots[i], h = drag.held0;
-  if (drag.snap.has(i) || slotEls[i].classList.contains('hid')) return;
+  if (i === 53 || drag.snap.has(i) || slotEls[i].classList.contains('hid')) return;
   if (!s || (s.b === h.b && maxStack(s.b) > 1 && s.n < STACK)) dragAdd(i);
 });
 addEventListener('mouseup', () => { drag = null; });
 function moveHeld(e) { heldEl.style.left = e.clientX + 'px'; heldEl.style.top = e.clientY + 'px'; }
 addEventListener('mousemove', moveHeld); addEventListener('mousedown', moveHeld, true);
-function openInv(size) {   // size: 2=手持ちクラフト, 3=作業台
-  craftSize = size === 3 ? 3 : 2;
+function openInv(mode) {   // 2=手持ちクラフト, 3=作業台, 'furnace'=かまど
+  station = mode === 3 ? 3 : mode === 'furnace' ? 'furnace' : 2;
+  craftSize = station === 3 ? 3 : 2;
+  const fu = station === 'furnace';
+  $('craftrow').style.display = fu ? 'none' : 'flex'; $('furnrow').style.display = fu ? 'flex' : 'none';
   $('craft').style.gridTemplateColumns = `repeat(${craftSize}, 40px)`;
-  $('crafttitle').textContent = craftSize === 3 ? '作業台' : 'クラフト';
+  $('crafttitle').textContent = fu ? 'かまど' : craftSize === 3 ? '作業台' : 'クラフト';
   for (const i of CRAFT) slotEls[i].classList.toggle('hid', craftSize === 2 && !CRAFT2.includes(i));
   invOpen = true; invEl.style.display = 'flex';
   $('panel').style.transform = `scale(${Math.min(1, innerWidth / 440, innerHeight / 420)})`;
@@ -1192,8 +1361,8 @@ function openInv(size) {   // size: 2=手持ちクラフト, 3=作業台
 }
 function closeInv() {
   // クラフト枠と手持ちはインベントリへ戻す。入りきらなければ足元にドロップ
-  const back = CRAFT.map(i => { const s = slots[i]; slots[i] = null; return s; }).concat([held]);
-  held = null; drag = null;
+  const back = CRAFT.concat(FURN).map(i => { const s = slots[i]; slots[i] = null; return s; }).concat([held]);
+  held = null; drag = null; smeltT = 0;
   for (const s of back) {
     if (!s) continue;
     const left = insert(s, STORE.concat(HOTBAR));
@@ -1201,6 +1370,28 @@ function closeInv() {
   }
   invOpen = false; invEl.style.display = 'none';
   refreshUI(); lock();
+}
+
+// かまど: 開いている間だけ焼ける。1個3秒。閉じると中身はインベントリに戻る
+function updateFurnace(dt) {
+  if (!invOpen || station !== 'furnace') return;
+  const inp = slots[51], out = slots[53], prod = inp ? SMELT[inp.b] : 0;
+  const ok = prod && (!out || (out.b === prod && out.n < STACK));
+  if (ok && burn <= 0) {   // 燃料を1個くべる
+    const fu = slots[52];
+    if (fu && FUEL[fu.b]) { burn += FUEL[fu.b]; if (--fu.n <= 0) slots[52] = null; refreshUI(); }
+  }
+  if (ok && burn > 0) {
+    smeltT += dt / 3; burn -= dt / 3;
+    if (smeltT >= 1) {
+      smeltT = 0;
+      if (--inp.n <= 0) slots[51] = null;
+      if (out) out.n++; else slots[53] = { b: prod, n: 1 };
+      refreshUI();
+    }
+  } else smeltT = 0;
+  $('smeltbar').firstChild.style.width = (smeltT * 100) + '%';
+  $('burnbar').firstChild.style.width = Math.max(0, Math.min(100, burn * 100 / 8)) + '%';
 }
 
 // ---------- 入力 ----------
@@ -1220,10 +1411,10 @@ goBtn.addEventListener('click', enter);
 nameIn.addEventListener('keydown', e => { if (e.code === 'Enter' && !e.isComposing) enter(); });
 canvas.addEventListener('mousedown', e => {
   if (!locked()) lock();
-  if (e.button === 0) mouse.l = true;
-  if (e.button === 2) { mouse.r = true; placeCd = 0; }
+  if (e.button === 0) { mouse.l = true; noBreak = active() && attack(); }   // 何かを殴ったら、離すまでブロックは壊さない
+  if (e.button === 2) { mouse.r = true; placeCd = Math.min(placeCd, 0); }
 });
-addEventListener('mouseup', e => { if (e.button === 0) mouse.l = false; if (e.button === 2) mouse.r = false; });
+addEventListener('mouseup', e => { if (e.button === 0) { mouse.l = false; noBreak = false; } if (e.button === 2) mouse.r = false; });
 addEventListener('contextmenu', e => e.preventDefault());
 addEventListener('mousemove', e => {
   if (invOpen || !(locked() || mouse.l || mouse.r)) return;
@@ -1301,7 +1492,7 @@ function touchEnd(e) {
     if (t.identifier === moveId) { moveId = null; joy.x = joy.y = 0; }
     if (t.identifier === lookId) {
       lookId = null; clearTimeout(holdTimer);
-      if (!mouse.l && performance.now() - lookT < 250 && lookMoved < 10 && active()) { target = raycast(REACH); useTarget(); }
+      if (!mouse.l && performance.now() - lookT < 250 && lookMoved < 10 && active()) { target = raycast(REACH); if (!attack()) useItem(); }
       mouse.l = false;
     }
   }
@@ -1337,7 +1528,7 @@ function addOther(p) {
   const el = document.createElement('div'); el.className = 'tag'; el.textContent = p.name;
   $('names').appendChild(el);
   others.set(p.id, { name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw || 0, pitch: p.pitch || 0,
-    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, phase: 0, speed: 0, el });
+    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, phase: 0, speed: 0, hurt: 0, el });
 }
 const NET = {
   init(m) {
@@ -1345,6 +1536,7 @@ const NET = {
     for (const [x, y, z, b] of m.edits) recEdit(x, y, z, b);
     for (const p of m.players) addOther(p);
     for (const it of m.items) items.push(it);
+    for (const mb of m.mobs) addMob(mb);
     spawn(); loadLocal(); refreshUI();
     online = true; started = true; startEl.style.display = 'none';
     setInterval(saveLocal, 5000);
@@ -1373,6 +1565,21 @@ const NET = {
     refreshUI();
   },
   tod(m) { tod = m.v; },
+  mob(m) { addMob(m.m); },
+  ms(m) { for (const [id, x, y, z, yaw] of m.l) { const mb = mobs.get(id); if (mb && mb.owner !== myId) { mb.tx = x; mb.ty = y; mb.tz = z; mb.tyaw = yaw; } } },
+  mrm(m) { mobs.delete(m.id); },
+  mown(m) { const mb = mobs.get(m.id); if (mb) { mb.owner = m.owner; mb.vy = 0; mb.dir = mb.yaw; } },
+  mhurt(m) {
+    const mb = mobs.get(m.id);
+    if (!mb) return;
+    mb.hurt = 0.3;
+    if (mb.owner === myId) {   // 動かしている本人が吹き飛びと逃げを反映
+      mb.kbx = m.kx; mb.kbz = m.kz; if (mb.ground) mb.vy = 5;
+      if (!MOBS[mb.kind].hostile) { mb.flee = 4; mb.dir = Math.atan2(-m.kx, -m.kz); }
+    }
+  },
+  hurt(m) { hurtMe(m.dmg, m.kx, m.kz, m.cause); },
+  wantspawn(m) { pickSpawn(m.kind); },
   chat(m) { addChat(m.name, m.text); },
 };
 function connect(name) {
@@ -1398,6 +1605,8 @@ function loadLocal() {
   try { s = JSON.parse(localStorage.getItem(saveKey())); } catch (e) {}
   if (!s || !Array.isArray(s.slots)) return;
   const ok = st => st && NAME[st.b] && Number.isInteger(st.n) && st.n > 0 && st.n <= STACK;
+  const OLD = { 110: 200, 111: 201, 112: 202, 113: 210, 114: 211, 115: 212 };   // 旧ツールIDの読み替え
+  for (const st of s.slots.concat([s.held])) if (st && OLD[st.b]) st.b = OLD[st.b];
   for (let i = 0; i < 42; i++) slots[i] = ok(s.slots[i]) ? s.slots[i] : null;
   for (const st of s.slots.slice(42).concat([s.held])) if (ok(st)) insert(st, STORE.concat(HOTBAR));   // クラフト枠に残っていた分
   if (Number.isInteger(s.sel) && s.sel >= 0 && s.sel < 9) sel = s.sel;
@@ -1416,6 +1625,9 @@ function netTick(dt) {
     const m = { t: 'pos', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(2), pitch: +P.pitch.toFixed(2), sn: P.sneak ? 1 : 0 };
     const s = JSON.stringify(m);
     if (s !== lastPos) { lastPos = s; send(m); }
+    const l = [];
+    for (const mb of mobs.values()) if (mb.owner === myId) l.push([mb.id, +mb.x.toFixed(2), +mb.y.toFixed(2), +mb.z.toFixed(2), +mb.yaw.toFixed(2)]);
+    if (l.length) send({ t: 'mobs', l });
   }
   // 他プレイヤーをなめらかに動かす
   const k = Math.min(1, dt * 12);
@@ -1444,13 +1656,14 @@ function pushBox(o, ox, oy, oz, yaw, pv, sz, off, rx, cTop, cSide) {
   }
   return o;
 }
-const SKIN = [0.87, 0.68, 0.53], HAIR = [0.26, 0.17, 0.10], PANTS = [0.20, 0.23, 0.48], EYE_C = [0.08, 0.08, 0.10];
+const SKIN0 = [0.87, 0.68, 0.53], HAIR0 = [0.26, 0.17, 0.10], PANTS0 = [0.20, 0.23, 0.48], EYE_C = [0.08, 0.08, 0.10];
 const SHIRTS = [[0.20, 0.62, 0.72], [0.80, 0.30, 0.28], [0.36, 0.66, 0.30], [0.84, 0.66, 0.22], [0.58, 0.36, 0.74], [0.88, 0.50, 0.24]];
 function drawPlayers() {
   let o = 0, boxes = 0;
   for (const [id, p] of others) {
     if (p.ty < -50 || boxes + 8 > MAXCUBE) continue;
-    const sh = SHIRTS[id % SHIRTS.length], y = p.y - (p.sn ? 0.12 : 0);
+    const red = p.hurt > 0, sh = tintRed(SHIRTS[id % SHIRTS.length], red), y = p.y - (p.sn ? 0.12 : 0);
+    const SKIN = tintRed(SKIN0, red), PANTS = tintRed(PANTS0, red), HAIR = tintRed(HAIR0, red);
     const sw = Math.sin(p.phase) * 0.8 * Math.min(1, p.speed / 4);
     const B = (pv, sz, off, rx, ct, cs) => { o = pushBox(o, p.x, y, p.z, p.yaw, pv, sz, off, rx, ct, cs); boxes++; };
     B([-0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, PANTS, PANTS);
@@ -1480,6 +1693,177 @@ function updateTags() {
     p.el.style.top = ((1 - (sy * 0.5 + 0.5)) * innerHeight) + 'px';
   }
 }
+// ---------- モブ・戦闘 ----------
+// モブ（ゾンビ・動物）は「一番近いプレイヤーのブラウザ」が動かして、位置をサーバー経由で全員に配る。
+// サーバーは地形を持たないので、当たり判定が必要な処理はブラウザ側でやる。体力と生死はサーバーが管理する。
+const MOBS = {
+  zombie:  { w: 0.3,  h: 1.8, speed: 2.6, hostile: true },
+  pig:     { w: 0.4,  h: 0.9, speed: 1.6 },
+  cow:     { w: 0.45, h: 1.3, speed: 1.4 },
+  chicken: { w: 0.22, h: 0.7, speed: 1.5 },
+};
+const mobs = new Map();
+function addMob(m) {
+  mobs.set(m.id, { ...m, tx: m.x, ty: m.y, tz: m.z, tyaw: m.yaw || 0, yaw: m.yaw || 0, dir: m.yaw || 0,
+    vy: 0, kbx: 0, kbz: 0, ground: false, aiT: 0, atkCd: 0, moving: false, flee: 0, hurt: 0, phase: 0, speed: 0 });
+}
+function mobMove(m, K, dx, dy, dz) {
+  let wall = false;
+  if (dx) { const nx = m.x + dx; if (boxHit(nx, m.y, m.z, K.w, K.h)) wall = true; else m.x = nx; }
+  if (dz) { const nz = m.z + dz; if (boxHit(m.x, m.y, nz, K.w, K.h)) wall = true; else m.z = nz; }
+  if (dy) {
+    const ny = m.y + dy;
+    if (boxHit(m.x, ny, m.z, K.w, K.h)) { if (dy < 0) { m.y = Math.floor(ny) + 1; m.ground = true; } m.vy = 0; }
+    else m.y = ny;
+  }
+  return wall;
+}
+// 自分が担当しているモブを1体ぶん動かす
+function simMob(m, dt) {
+  const K = MOBS[m.kind];
+  m.aiT -= dt; m.atkCd -= dt;
+  let sp = 0, tgt = null, best = 32 * 32;   // 32ブロック以内のプレイヤーに気づく
+  if (K.hostile) {   // 一番近いプレイヤーを追う
+    const cand = [[myId, P.x, P.y, P.z]];
+    for (const [id, o] of others) if (o.ty > -50) cand.push([id, o.x, o.y, o.z]);
+    for (const c of cand) { const d = (c[1] - m.x) ** 2 + (c[2] - m.y) ** 2 + (c[3] - m.z) ** 2; if (d < best) { best = d; tgt = c; } }
+  }
+  if (tgt) {
+    m.dir = Math.atan2(-(tgt[1] - m.x), -(tgt[3] - m.z));
+    sp = best < 0.7 ? 0 : K.speed;
+    if (best < 1.7 * 1.7 && m.atkCd <= 0) {
+      m.atkCd = 1;
+      if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(3, (P.x - m.x) / l * 5, (P.z - m.z) / l * 5, 'ゾンビ'); }
+      else send({ t: 'mattack', id: m.id, target: tgt[0] });
+    }
+  } else {
+    if (m.aiT <= 0) { m.aiT = 2 + Math.random() * 4; m.moving = Math.random() < 0.6; if (m.flee <= 0) m.dir = Math.random() * Math.PI * 2; }
+    if (m.flee > 0) { m.flee -= dt; sp = K.speed * 2.2; } else if (m.moving) sp = K.speed * 0.6;
+  }
+  m.yaw = m.dir;
+  const f = Math.floor, inW = getBlock(f(m.x), f(m.y + 0.3), f(m.z)) === WATER;
+  const dec = Math.exp(-6 * dt); m.kbx *= dec; m.kbz *= dec;
+  const vx = -Math.sin(m.dir) * sp + m.kbx, vz = -Math.cos(m.dir) * sp + m.kbz;
+  m.vy = inW ? 1.5 : Math.max(m.vy - 26 * dt, -30);
+  m.ground = false;
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(vx), Math.abs(m.vy), Math.abs(vz)) * dt / 0.4)), h = dt / steps;
+  let wall = false;
+  for (let i = 0; i < steps; i++) wall = mobMove(m, K, vx * h, m.vy * h, vz * h) || wall;
+  if (wall && m.ground && sp > 0) m.vy = 8;   // 段差はジャンプで登る
+}
+function updateMobs(dt) {
+  const k = Math.min(1, dt * 10);
+  for (const m of mobs.values()) {
+    const px = m.x, pz = m.z;
+    if (m.owner === myId) simMob(m, dt);
+    else {
+      m.x += (m.tx - m.x) * k; m.y += (m.ty - m.y) * k; m.z += (m.tz - m.z) * k;
+      let dy = m.tyaw - m.yaw; dy -= Math.round(dy / (Math.PI * 2)) * Math.PI * 2; m.yaw += dy * k;
+    }
+    const sp = dt > 0 ? Math.hypot(m.x - px, m.z - pz) / dt : 0;
+    m.speed += (sp - m.speed) * Math.min(1, dt * 8);
+    m.phase += m.speed * dt * 3;
+    if (m.hurt > 0) m.hurt -= dt;
+  }
+  for (const o of others.values()) if (o.hurt > 0) o.hurt -= dt;
+}
+// 光線と箱の当たり判定（当たった距離を返す。外れたら null）
+function rayBox(o, d, x0, y0, z0, x1, y1, z1) {
+  let t0 = 0, t1 = Infinity;
+  const lo = [x0, y0, z0], hi = [x1, y1, z1];
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(d[a]) < 1e-9) { if (o[a] < lo[a] || o[a] > hi[a]) return null; continue; }
+    let ta = (lo[a] - o[a]) / d[a], tb = (hi[a] - o[a]) / d[a];
+    if (ta > tb) { const s = ta; ta = tb; tb = s; }
+    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+    if (t0 > t1) return null;
+  }
+  return t0;
+}
+// 左クリックした瞬間に呼ぶ。プレイヤーかモブに当たったら true（その間はブロックを壊さない）
+function attack() {
+  if (atkCd > 0) return false;
+  const o = [P.x, eyeY(), P.z], d = lookDir();
+  let maxT = Math.min(3.5, target ? target.t : 99), hit = null, isMob = false;
+  for (const [id, p] of others) {
+    if (p.ty < -50) continue;
+    const t = rayBox(o, d, p.x - 0.35, p.y, p.z - 0.35, p.x + 0.35, p.y + 1.8, p.z + 0.35);
+    if (t !== null && t < maxT) { maxT = t; hit = id; isMob = false; p.hurt = 0.3; }
+  }
+  for (const [id, m] of mobs) {
+    const K = MOBS[m.kind], t = rayBox(o, d, m.x - K.w - 0.05, m.y, m.z - K.w - 0.05, m.x + K.w + 0.05, m.y + K.h, m.z + K.w + 0.05);
+    if (t !== null && t < maxT) { maxT = t; hit = id; isMob = true; }
+  }
+  if (hit === null) return false;
+  atkCd = 0.35;
+  const tool = heldTool(), dmg = tool ? tool.dmg : 1, l = Math.hypot(d[0], d[2]) || 1;
+  send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6 });
+  if (tool) useTool();
+  return true;
+}
+// 自分がダメージを受けた（他プレイヤーかゾンビから）
+function hurtMe(dmg, kx, kz, cause) {
+  if (P.inv > 0 || P.fly) return;
+  P.inv = 0.45; P.kbx = kx; P.kbz = kz;
+  if (P.ground) P.vy = 5;
+  damage(dmg, cause);
+}
+// モブの見た目
+const tintRed = (c, on) => on ? [c[0] * 0.5 + 0.5, c[1] * 0.45, c[2] * 0.45] : c;
+const ZSKIN = [0.36, 0.56, 0.30], ZSHIRT = [0.18, 0.46, 0.52], ZPANTS = [0.27, 0.23, 0.46];
+const QUAD = {   // 胴[幅,高さ,長さ] 脚の高さ 頭[幅,高さ,長さ] 色
+  pig:     { b: [0.5, 0.42, 0.8], leg: 0.28, hd: [0.4, 0.38, 0.36], top: [0.94, 0.64, 0.64], side: [0.88, 0.56, 0.58], nose: [0.80, 0.42, 0.46] },
+  cow:     { b: [0.6, 0.58, 1.0], leg: 0.55, hd: [0.42, 0.42, 0.36], top: [0.30, 0.20, 0.14], side: [0.36, 0.25, 0.18], nose: [0.86, 0.82, 0.78] },
+  chicken: { b: [0.3, 0.3, 0.42], leg: 0.24, hd: [0.2, 0.26, 0.2], top: [0.96, 0.96, 0.94], side: [0.88, 0.88, 0.86], nose: [0.92, 0.70, 0.16] },
+};
+function drawMobs() {
+  let o = 0, boxes = 0;
+  for (const m of mobs.values()) {
+    if (boxes + 9 > MAXCUBE) break;
+    const red = m.hurt > 0, sw = Math.sin(m.phase) * 0.7 * Math.min(1, m.speed / 1.5);
+    const B = (pv, sz, off, rx, ct, cs) => { o = pushBox(o, m.x, m.y, m.z, m.yaw, pv, sz, off, rx, tintRed(ct, red), tintRed(cs, red)); boxes++; };
+    if (m.kind === 'zombie') {
+      B([-0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, ZPANTS, ZPANTS);
+      B([0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], -sw, ZPANTS, ZPANTS);
+      B([0, 0.675, 0], [0.45, 0.675, 0.225], [0, 0.3375, 0], 0, ZSHIRT, ZSHIRT);
+      B([-0.3375, 1.25, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], 1.45, ZSHIRT, ZSKIN);   // 腕を前に突き出す
+      B([0.3375, 1.25, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], 1.45, ZSHIRT, ZSKIN);
+      B([0, 1.35, 0], [0.45, 0.45, 0.45], [0, 0.225, 0], 0, ZSKIN, ZSKIN);
+      B([0, 1.35, 0], [0.08, 0.08, 0.02], [-0.1, 0.25, -0.23], 0, EYE_C, EYE_C);
+      B([0, 1.35, 0], [0.08, 0.08, 0.02], [0.1, 0.25, -0.23], 0, EYE_C, EYE_C);
+    } else {
+      const Q = QUAD[m.kind], [bw, bh, bl] = Q.b, L = Q.leg, lw = m.kind === 'chicken' ? 0.06 : 0.16;
+      const lx = bw / 2 - lw / 2 - 0.02, lz = m.kind === 'chicken' ? 0 : bl / 2 - lw / 2 - 0.04;
+      const legC = m.kind === 'chicken' ? Q.nose : Q.side;
+      B([0, L, 0], [bw, bh, bl], [0, bh / 2, 0], 0, Q.top, Q.side);
+      B([-lx, L, -lz], [lw, L, lw], [0, -L / 2, 0], sw, legC, legC);
+      B([lx, L, -lz], [lw, L, lw], [0, -L / 2, 0], -sw, legC, legC);
+      if (lz) { B([-lx, L, lz], [lw, L, lw], [0, -L / 2, 0], -sw, legC, legC); B([lx, L, lz], [lw, L, lw], [0, -L / 2, 0], sw, legC, legC); }
+      const hy = L + bh * 0.75;
+      B([0, hy, -bl / 2], Q.hd, [0, Q.hd[1] * 0.2, -Q.hd[2] / 2 + 0.06], 0, Q.top, Q.side);
+      B([0, hy, -bl / 2], [Q.hd[0] * 0.5, Q.hd[1] * 0.35, 0.08], [0, 0, -Q.hd[2] + 0.04], 0, Q.nose, Q.nose);   // 鼻・くちばし
+      B([0, hy, -bl / 2], [Q.hd[0] + 0.01, 0.06, 0.02], [0, Q.hd[1] * 0.4, -Q.hd[2] + 0.055], 0, EYE_C, EYE_C); // 目（横一列の細い帯の両端だけ見える）
+    }
+  }
+  if (!boxes) return;
+  dynDraw(o);
+  gl.drawElements(gl.TRIANGLES, boxes * 36, gl.UNSIGNED_SHORT, 0);
+}
+// サーバーから「この種類を近くに出して」と頼まれたら、地形を見て場所を決めて返す
+function pickSpawn(kind) {
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * Math.PI * 2, r = 16 + Math.random() * 24;
+    const x = Math.floor(P.x + Math.cos(a) * r), z = Math.floor(P.z + Math.sin(a) * r);
+    let y = H - 1;
+    while (y > 1 && !opaque(getBlock(x, y, z))) y--;
+    const g = getBlock(x, y, z);
+    if (y + 3 >= H || getBlock(x, y + 1, z) === WATER) continue;
+    if (kind === 'zombie' ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
+    send({ t: 'spawn', kind, x: x + 0.5, y: y + 1, z: z + 0.5 });
+    return;
+  }
+}
+
 // チャット
 const chatIn = $('chatin'), chatLog = $('chatlog');
 function addChat(name, text) {
@@ -1562,7 +1946,7 @@ function render() {
   gl.disable(gl.BLEND); gl.depthMask(true); gl.uniform1f(uAlpha, 1); gl.uniform1f(uNoise, 1);
   for (const m of meshes.values()) if (m.op) { gl.bindVertexArray(m.op.vao); gl.drawElements(gl.TRIANGLES, m.op.n, gl.UNSIGNED_INT, 0); }
   gl.uniform1f(uNoise, 0);
-  drawItems(); drawPlayers(); drawOutline(); drawCrack(); drawSprites();
+  drawItems(); drawPlayers(); drawMobs(); drawOutline(); drawCrack(); drawSprites();
   gl.uniform1f(uNoise, 1);
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.uniform1f(uAlpha, 0.72);
   gl.disable(gl.CULL_FACE);
@@ -1581,7 +1965,7 @@ let last = 0, fps = 60, hudT = 0;
 function frame(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.1); last = t;
   tod = (tod + dt / DAYLEN) % 1;
-  update(dt); updateInteract(dt); updateItems(dt); netTick(dt); loadChunks(); render(); updateTags();
+  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); netTick(dt); loadChunks(); render(); updateTags();
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
