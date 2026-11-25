@@ -122,6 +122,7 @@ Enter チャット / 作業台・かまどは右クリックで開く
         <div id="furnrow"><div id="furnin" class="col"></div><div id="furnmid"><div id="smeltbar"><i></i></div><div id="burnbar"><i></i></div></div><div id="furnout"></div></div>
       </div>
     </div>
+    <div id="chestbox" style="display:none"><h2>チェスト</h2><div id="chest" class="grid9" style="margin-bottom:14px"></div></div>
     <h2>インベントリ</h2>
     <div id="main" class="grid9"></div>
     <div id="bar" class="grid9"></div>
@@ -147,11 +148,14 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   GOLD_ORE = 20, DIAMOND_ORE = 21, FURNACE = 22, FARMLAND = 23,
   TALLGRASS = 24, WHEAT0 = 25, WHEAT1 = 26, WHEAT2 = 27, WHEAT3 = 28,
   WOOL = 34, BED = 35, IRON_BLOCK = 36, GOLD_BLOCK = 37, DIAMOND_BLOCK = 38, COAL_BLOCK = 39, STONE_BRICK = 40,
-  GLASS = 41, CLAY = 42, BRICK = 43, SAPLING = 44;   // 24〜28 は植物（すり抜ける・四角くない）
+  GLASS = 41, CLAY = 42, BRICK = 43, SAPLING = 44,
+  CHEST = 45, CAKE0 = 46, CAKE3 = 49,              // ケーキは 46〜49（食べるたびに1つ進む。46 が丸ごと）
+  CARROT0 = 50, CARROT3 = 53, POTATO0 = 54, POTATO3 = 57;   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
-  CLOCK = 130, SHEARS = 131, BUCKET = 132, WATER_BUCKET = 133, APPLE = 134, GOLDEN_APPLE = 135, SHIELD = 136;   // 防具は 300 番台
+  CLOCK = 130, SHEARS = 131, BUCKET = 132, WATER_BUCKET = 133, APPLE = 134, GOLDEN_APPLE = 135, SHIELD = 136,
+  EGG = 137, CARROT = 138, POTATO = 139, BAKED_POTATO = 140;   // 防具は 300 番台
 // ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
@@ -180,7 +184,8 @@ HARD[LOG] = 2.0; HARD[SANDSTONE] = 2.5; HARD[STONE] = 3.0; HARD[BEDROCK] = Infin
 HARD[COBBLE] = 3.0; HARD[PLANKS] = 2.0; HARD[TABLE] = 2.5; HARD[COAL_ORE] = 4.0; HARD[IRON_ORE] = 4.5;
 HARD[GOLD_ORE] = 4.5; HARD[DIAMOND_ORE] = 5.0; HARD[FURNACE] = 3.5; HARD[FARMLAND] = 0.8;
 for (let b = TALLGRASS; b <= WHEAT3; b++) HARD[b] = 0.05;
-const isPlant = b => (b >= TALLGRASS && b <= WHEAT3) || b === SAPLING;
+const isPlant = b => (b >= TALLGRASS && b <= WHEAT3) || b === SAPLING || (b >= CARROT0 && b <= POTATO3);
+const isCake = b => b >= CAKE0 && b <= CAKE3;
 Object.assign(NAME, { [COBBLE]: '丸石', [PLANKS]: '板材', [TABLE]: '作業台', [COAL_ORE]: '石炭鉱石', [IRON_ORE]: '鉄鉱石',
   [GOLD_ORE]: '金鉱石', [DIAMOND_ORE]: 'ダイヤ鉱石', [FURNACE]: 'かまど', [FARMLAND]: '耕した土', [TALLGRASS]: '草',
   [WHEAT0]: '小麦', [WHEAT1]: '小麦', [WHEAT2]: '小麦', [WHEAT3]: '小麦（収穫できる）',
@@ -268,6 +273,16 @@ const armorId = (tier, part) => 300 + tier * 10 + part;
   ARMOR[id] = { part: pi, tier: ti, def: defs[k], dur: dm * [15, 7, 33][k] };
   NAME[id] = TIERS[ti].name + 'の' + label;
 }));
+// ---- チェスト・食べ物（第3弾） ----
+Object.assign(NAME, { [CHEST]: 'チェスト', [EGG]: '卵', [CARROT]: 'にんじん', [POTATO]: 'じゃがいも', [BAKED_POTATO]: '焼きじゃがいも' });
+for (let b = CAKE0; b <= CAKE3; b++) { NAME[b] = 'ケーキ'; HARD[b] = 0.3; COL[b] = [[0.96, 0.94, 0.90], [0.62, 0.40, 0.24], [0.62, 0.40, 0.24]]; }
+for (let b = CARROT0; b <= POTATO3; b++) { NAME[b] = b <= CARROT3 ? 'にんじん' : 'じゃがいも'; HARD[b] = 0.05; COL[b] = COL[GRASS]; }
+COL[CHEST] = [[0.56, 0.39, 0.19], [0.63, 0.45, 0.23], [0.50, 0.34, 0.16]];
+HARD[CHEST] = 2.5; TOOL_FOR[CHEST] = 'axe';
+FOOD[CARROT] = 3; FOOD[POTATO] = 1; FOOD[BAKED_POTATO] = 5;
+SMELT[POTATO] = BAKED_POTATO;
+// 耕した土に植えられる物 → 最初の段階のブロック
+const PLANTABLE = { [SEEDS]: WHEAT0, [CARROT]: CARROT0, [POTATO]: POTATO0 };
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -481,7 +496,7 @@ function batch(fn) {
   meshBatch = new Set();
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3);   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
 const solid = b => opaque(b) || b === GLASS;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
@@ -504,8 +519,9 @@ const FCI = [1, 1, 0, 2, 1, 1];   // 面 → 色インデックス
 // 草と小麦は、細い三角の葉を何枚か立てて作る（両面から見えるよう裏表2枚ずつ）
 const WHEAT_COL = [[0.40, 0.70, 0.25], [0.42, 0.70, 0.24], [0.58, 0.72, 0.24], [0.88, 0.72, 0.26]];
 function plantMesh(V, I, b, wx, y, wz, bi, lt, tl = 0) {
-  const wheat = b >= WHEAT0, st = b - WHEAT0, tn = 0.4 * tl;   // tn: 松明の光（法線の長さに入れてシェーダーへ渡す）
-  const n = wheat ? 9 : 6, hgt = wheat ? [0.22, 0.42, 0.62, 0.9][st] : 0.75, col = wheat ? WHEAT_COL[st] : GTINT[bi][0];
+  const root = b >= CARROT0, wheat = b >= WHEAT0, st = root ? (b - CARROT0) & 3 : b - WHEAT0, tn = 0.4 * tl;   // root: にんじん・じゃがいも   // tn: 松明の光（法線の長さに入れてシェーダーへ渡す）
+  const n = wheat ? 9 : 6, hgt = root ? [0.16, 0.28, 0.4, 0.52][st] : wheat ? [0.22, 0.42, 0.62, 0.9][st] : 0.75;
+  const col = root ? (b <= CARROT3 ? [0.36, 0.74, 0.22] : [0.20, 0.50, 0.20]) : wheat ? WHEAT_COL[st] : GTINT[bi][0];
   for (let i = 0; i < n; i++) {
     const r1 = hash3(wx, y, wz, 700 + i), r2 = hash3(wx, y, wz, 720 + i), r3 = hash3(wx, y, wz, 740 + i);
     const bx = wheat ? 0.2 + (i % 3) * 0.3 + (r1 - 0.5) * 0.1 : 0.15 + r1 * 0.7;
@@ -597,13 +613,15 @@ function buildMesh(cx, cz) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
     if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
-    if (b === BED || b === SAPLING) {
+    if (b === BED || b === SAPLING || isCake(b)) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
       const X = ox + x, Z = oz + z;
       if (b === BED) {   // 木の台・赤い布団・白い枕
         boxMesh(ov, oi, X, y, Z, X + 1, y + 0.3, Z + 1, COL[PLANKS][0], COL[PLANKS][1], lt, tl);
         boxMesh(ov, oi, X + 0.03, y + 0.3, Z + 0.03, X + 0.97, y + 0.56, Z + 0.97, COL[BED][0], [0.62, 0.13, 0.13], lt, tl);
         boxMesh(ov, oi, X + 0.15, y + 0.56, Z + 0.08, X + 0.85, y + 0.66, Z + 0.38, [0.95, 0.95, 0.93], [0.86, 0.86, 0.84], lt, tl);
+      } else if (isCake(b)) {   // 食べた分だけ片側から欠けていく
+        boxMesh(ov, oi, X + 0.07 + (b - CAKE0) * 0.215, y, Z + 0.07, X + 0.93, y + 0.45, Z + 0.93, COL[b][0], COL[b][1], lt, tl);
       } else {           // 細い幹と葉のかたまり
         boxMesh(ov, oi, X + 0.45, y, Z + 0.45, X + 0.55, y + 0.4, Z + 0.55, [0.46, 0.33, 0.19], [0.40, 0.29, 0.17], lt, tl);
         boxMesh(ov, oi, X + 0.28, y + 0.35, Z + 0.28, X + 0.72, y + 0.8, Z + 0.72, COL[LEAF][0], COL[LEAF][1], lt, tl);
@@ -901,6 +919,16 @@ const SPR = {}, SPR_IDS = [];
     for (let y = 9; y <= 14; y++) { set(7, y, [120, 84, 46]); set(8, y, [90, 62, 32]); }
     each((x, y) => { if ((x - 7.5) ** 2 / 20 + (y - 6) ** 2 / 14 < 1) set(x, y, (x * 7 + y * 3) % 5 < 2 ? [52, 140, 44] : [74, 170, 58]); });
   });
+  mk(EGG, set => { each((x, y) => { if ((x - 7.5) ** 2 / 20 + (y - 8.5) ** 2 / 30 < 1) set(x, y, x + y < 14 ? [250, 244, 226] : [226, 214, 188]); }); });
+  mk(CARROT, set => {
+    for (let i = 0; i < 9; i++) for (let w = 0; w <= Math.min(2, Math.floor((9 - i) / 3) + (i < 7 ? 1 : 0)); w++) { set(3 + i + w, 13 - i, [238, 130, 30]); set(3 + i, 13 - i - w, [206, 100, 20]); }
+    for (const [x, y] of [[11, 3], [12, 2], [13, 3], [12, 4], [10, 2], [13, 5]]) set(x, y, [70, 160, 50]);
+  });
+  const potato = (c, dk) => set => {
+    each((x, y) => { if ((x - 7.5) ** 2 / 34 + (y - 8.5) ** 2 / 20 < 1) set(x, y, x + y < 15 ? c : dk); });
+    for (const [x, y] of [[5, 7], [9, 10], [10, 6]]) set(x, y, dk.map(v => v - 30));
+  };
+  mk(POTATO, potato([206, 170, 104], [170, 132, 72])); mk(BAKED_POTATO, potato([226, 178, 84], [176, 118, 44]));
   // 防具（素材の色だけ変えて使い回す）
   const ARM_DRAW = [
     m => set => { for (let y = 4; y <= 10; y++) for (let x = 3; x <= 12; x++) { if (y === 4 && (x === 3 || x === 12)) continue; if (y >= 8 && x >= 6 && x <= 9) continue; set(x, y, y < 6 ? m[0] : m[1]); } for (let x = 4; x <= 7; x++) set(x, 5, [255, 255, 255]); },
@@ -1119,6 +1147,11 @@ function dropsOf(b, tool) {
     return r < 0.06 ? [SAPLING] : r < 0.08 ? [APPLE] : [];
   }
   if (b === GLASS) return [];   // ガラスは割れて無くなる
+  if (isCake(b)) return b === CAKE0 ? [CAKE0] : [];   // 食べかけのケーキは回収できない
+  if (b >= CARROT0 && b <= POTATO3) {                  // 育ちきっていれば 2〜4個、途中なら植えた1個が戻る
+    const it = b <= CARROT3 ? CARROT : POTATO;
+    return ((b - CARROT0) & 3) === 3 ? Array(2 + Math.floor(Math.random() * 3)).fill(it) : [it];
+  }
   if (b === TALLGRASS) return Math.random() < 0.15 ? [SEEDS] : [];          // 草: 15% で種
   if (b === WHEAT3) return Math.random() < 0.5 ? [WHEAT, SEEDS, SEEDS] : [WHEAT, SEEDS];
   if (b >= WHEAT0 && b < WHEAT3) return [SEEDS];
@@ -1175,7 +1208,7 @@ function tryPlace() {
   if (!target || !st || st.b >= 100) return;
   // 草などを狙っている時は、その場所に置き換える
   const x = isPlant(target.b) ? target.x : target.px, y = isPlant(target.b) ? target.y : target.py, z = isPlant(target.b) ? target.z : target.pz;
-  if (y < 0 || y >= H || solid(getBlock(x, y, z)) || getBlock(x, y, z) === BED) return;
+  if (y < 0 || y >= H || solid(getBlock(x, y, z)) || getBlock(x, y, z) === BED || isCake(getBlock(x, y, z))) return;
   // プレイヤーと重なる位置には置けない
   if (x + 1 > P.x - PW && x < P.x + PW && z + 1 > P.z - PW && z < P.z + PW && y + 1 > P.y && y < P.y + PH) return;
   if (occupied(x, y, z)) return;
@@ -1194,6 +1227,21 @@ function occupied(x, y, z) {
 function useItem() {
   const st = slots[sel];
   if (target && !P.sneak && (target.b === TABLE || target.b === FURNACE)) { mouse.r = false; openInv(target.b === TABLE ? 3 : 'furnace'); return; }
+  if (target && !P.sneak && target.b === CHEST) {   // チェスト: 中身はサーバーにあるので、開けてよいか聞く
+    mouse.r = false; send({ t: 'copen', x: target.x, y: target.y, z: target.z }); return;
+  }
+  if (target && !P.sneak && isCake(target.b)) {     // ケーキ: 1切れ食べる（体力が減っている時だけ）
+    if (P.hp < 20) {
+      P.hp = Math.min(20, P.hp + 3); drawStats(); placeCd = 0.5;
+      netSet(target.x, target.y, target.z, target.b === CAKE3 ? AIR : target.b + 1, target.b);
+    }
+    return;
+  }
+  if (st && PLANTABLE[st.b] && target && target.b === FARMLAND) {   // 種・にんじん・じゃがいもを耕した土に植える
+    const { x, y, z } = target;
+    if (y + 1 < H && getBlock(x, y + 1, z) === AIR) { netSet(x, y + 1, z, PLANTABLE[st.b], AIR); if (--st.n <= 0) slots[sel] = null; refreshUI(); }
+    return;
+  }
   if (target && !P.sneak && target.b === BED) { mouse.r = false; useBed(target); return; }
   if (st && (st.b === BUCKET || st.b === WATER_BUCKET)) { if (useBucket(st)) placeCd = 0.4; return; }
   if (st && FOOD[st.b]) {
@@ -1208,13 +1256,6 @@ function useItem() {
     if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
     netSet(x, y, z, FARMLAND, target.b);
     useTool();
-    return;
-  }
-  if (st && st.b === SEEDS) {
-    if (target.b !== FARMLAND || y + 1 >= H || getBlock(x, y + 1, z) !== AIR) return;
-    netSet(x, y + 1, z, WHEAT0, AIR);
-    if (--st.n <= 0) slots[sel] = null;
-    refreshUI();
     return;
   }
   tryPlace();
@@ -1476,10 +1517,11 @@ function drawOutline() {
 
 // ---------- インベントリ・クラフト ----------
 // 0-8 ホットバー / 9-35 収納 / 36-39 防具 / 40-41 手 / 42-50 クラフト(3x3。手持ちクラフトは左上2x2だけ使う) / 51 かまど材料 / 52 燃料 / 53 かまど完成品
-const slots = new Array(54).fill(null);
+const slots = new Array(81).fill(null);   // 54〜80 は開いているチェストの中身（27枠）
 const HOTBAR = [...Array(9).keys()], STORE = [...Array(27).keys()].map(i => i + 9);
 const INV_ORDER = HOTBAR.concat(STORE), CRAFT = [...Array(9).keys()].map(i => i + 42), CRAFT2 = [42, 43, 45, 46];
-const FURN = [51, 52, 53];
+const FURN = [51, 52, 53], CHESTS = [...Array(27).keys()].map(i => i + 54);
+let chestKey = null, chestSent = '';   // 開いているチェストの場所と、最後にサーバーへ送った中身
 let sel = 0, held = null, craftSize = 2, station = 2, burn = 0, smeltT = 0;
 const maxStack = b => (TOOLS[b] || ARMOR[b] || b === BUCKET || b === WATER_BUCKET || b === BED) ? 1 : STACK;
 // 防具枠(36〜39)には、その部位の防具しか入らない
@@ -1506,6 +1548,8 @@ RECIPES.push({ p: ['C', 'S'], k: { C: COAL, S: STICK }, out: [TORCH, 4] }, { p: 
 const nine = (k, a, b2) => [{ p: ['XXX', 'XXX', 'XXX'], k: { X: a }, out: [b2, 1] }, { p: ['X'], k: { X: b2 }, out: [a, 9], hide: true }];
 RECIPES.push(
   { p: ['WWW', 'PPP'], k: { W: WOOL, P: PLANKS }, out: [BED, 1] },
+  { p: ['PPP', 'P P', 'PPP'], k: { P: PLANKS }, out: [CHEST, 1] },
+  { p: [' E ', 'WWW'], k: { E: EGG, W: WHEAT }, out: [CAKE0, 1] },
   { p: ['SS', 'SS'], k: { S: STONE }, out: [STONE_BRICK, 4] },
   ...nine(0, IRON_INGOT, IRON_BLOCK), ...nine(0, GOLD_INGOT, GOLD_BLOCK), ...nine(0, DIAMOND, DIAMOND_BLOCK), ...nine(0, COAL, COAL_BLOCK),
   { p: [' I', 'I '], k: { I: IRON_INGOT }, out: [SHEARS, 1] },
@@ -1601,6 +1645,7 @@ function mkSlot(i, parent, label) {
 CRAFT.forEach(i => mkSlot(i, $('craft')));
 STORE.forEach(i => mkSlot(i, $('main')));
 HOTBAR.forEach(i => mkSlot(i, $('bar')));
+CHESTS.forEach(i => mkSlot(i, $('chest')));
 mkSlot(51, $('furnin'), '材料'); mkSlot(52, $('furnin'), '燃料'); mkSlot(53, $('furnout'));
 HOTBAR.forEach(i => {
   const el = document.createElement('div'); el.className = 'slot';
@@ -1624,7 +1669,8 @@ for (const R of RECIPES) {
 }
 for (const text of ['ツールは板材を 丸石・鉄インゴット・金インゴット・ダイヤ に変えると上位版になる。防具は鉄を 金・ダイヤ に変えても作れる。',
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
-  'かまど追加分: 砂→ガラス / 粘土→レンガ。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
+  'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
+  '卵は鶏が時々産む。にんじんとじゃがいもはゾンビが時々落とし、耕した土に植えると増やせる。ケーキは置いて右クリックで4回食べられる。',
   'かまど（材料＋燃料）: 鉄鉱石→鉄 / 金鉱石→金 / 丸石→石 / 原木→石炭 / 生肉→焼いた肉。燃料は石炭・原木・板材・棒。',
   '農業: クワで草ブロックか土を右クリック → 種を植える → 金色になったら収穫。']) {
   const n = document.createElement('div'); n.className = 'note'; n.textContent = text; $('recipes').appendChild(n);
@@ -1637,11 +1683,15 @@ function html(st) {
 }
 const heldEl = $('held'), invEl = $('inv'), resEl = $('result');
 function refreshUI() {
-  for (let i = 0; i < 54; i++) { slotEls[i].innerHTML = html(slots[i]); slotEls[i].title = slots[i] ? NAME[slots[i].b] : ''; }
+  for (let i = 0; i < 81; i++) { slotEls[i].innerHTML = html(slots[i]); slotEls[i].title = slots[i] ? NAME[slots[i].b] : ''; }
   for (let i = 0; i < 9; i++) { hudEls[i].innerHTML = html(slots[i]); hudEls[i].classList.toggle('sel', i === sel); }
   const out = craftResult();
   resEl.innerHTML = out ? html({ b: out[0], n: out[1] }) : ''; resEl.title = out ? NAME[out[0]] : '';
   heldEl.innerHTML = html(held); heldEl.style.display = held ? 'block' : 'none';
+  if (chestKey && invOpen) {   // チェストの中身が変わるたびにサーバーへ送る（閉じる前に切断しても消えないように）
+    const cs = CHESTS.map(i => slots[i]), js = JSON.stringify(cs);
+    if (js !== chestSent) { chestSent = js; send({ t: 'cput', key: chestKey, slots: cs }); }
+  }
 }
 function slotClick(i, right, shift) {
   if (i === 53) {   // かまどの完成品は取り出すだけ
@@ -1654,12 +1704,13 @@ function slotClick(i, right, shift) {
   }
   const s = slots[i], merge = s && held && s.b === held.b && maxStack(s.b) > 1;
   if (!shift && held && !fitsSlot(i, held)) return;
-  if (shift && s && i < 36 && ARMOR[s.b] && !slots[36 + ARMOR[s.b].part]) {   // Shift+クリックで防具を着る
+  if (shift && s && i < 36 && !chestKey && ARMOR[s.b] && !slots[36 + ARMOR[s.b].part]) {   // Shift+クリックで防具を着る
     slots[36 + ARMOR[s.b].part] = s; slots[i] = null; refreshUI(); return;
   }
   if (shift) {
     if (!s) return;
-    const order = i < 9 ? STORE : i < 36 ? HOTBAR : STORE.concat(HOTBAR);
+    // チェストを開いている時の Shift+クリックは、チェスト ⇔ 手持ち の移動
+    const order = chestKey ? (i >= 54 ? STORE.concat(HOTBAR) : CHESTS) : i < 9 ? STORE : i < 36 ? HOTBAR : STORE.concat(HOTBAR);
     if (insert(s, order) <= 0) slots[i] = null;
   } else if (!right) {
     if (!held) { held = s; slots[i] = null; }
@@ -1720,8 +1771,9 @@ invEl.addEventListener('mouseover', e => {
 addEventListener('mouseup', () => { drag = null; });
 function moveHeld(e) { heldEl.style.left = e.clientX + 'px'; heldEl.style.top = e.clientY + 'px'; }
 addEventListener('mousemove', moveHeld); addEventListener('mousedown', moveHeld, true);
-function openInv(mode) {   // 2=手持ちクラフト, 3=作業台, 'furnace'=かまど
-  station = mode === 3 ? 3 : mode === 'furnace' ? 'furnace' : 2;
+function openInv(mode) {   // 2=手持ちクラフト, 3=作業台, 'furnace'=かまど, 'chest'=チェスト
+  station = mode === 3 ? 3 : mode === 'furnace' ? 'furnace' : mode === 'chest' ? 'chest' : 2;
+  $('top').style.display = station === 'chest' ? 'none' : 'flex'; $('chestbox').style.display = station === 'chest' ? 'block' : 'none';
   craftSize = station === 3 ? 3 : 2;
   const fu = station === 'furnace';
   $('craftrow').style.display = fu ? 'none' : 'flex'; $('furnrow').style.display = fu ? 'flex' : 'none';
@@ -1738,6 +1790,12 @@ function closeInv() {
   // クラフト枠と手持ちはインベントリへ戻す。入りきらなければ足元にドロップ
   const back = CRAFT.concat(FURN).map(i => { const s = slots[i]; slots[i] = null; return s; }).concat([held]);
   held = null; drag = null; smeltT = 0;
+  if (chestKey) {   // チェストの中身は戻さず、最後の状態を送って閉じる
+    send({ t: 'cput', key: chestKey, slots: CHESTS.map(i => slots[i]) });
+    send({ t: 'cclose', key: chestKey });
+    for (const i of CHESTS) slots[i] = null;
+    chestKey = null; chestSent = '';
+  }
   for (const s of back) {
     if (!s) continue;
     const left = insert(s, STORE.concat(HOTBAR));
@@ -1958,6 +2016,13 @@ const NET = {
   set(m) { netApply(m.x, m.y, m.z, m.b); },
   sets(m) { batch(() => { for (const [x, y, z, b] of m.l) netApply(x, y, z, b); }); },
   grow(m) { growTree(m.x, m.y, m.z); },
+  copen(m) {   // チェストを開けてよい → 中身を受け取って画面を開く
+    if (invOpen) closeInv();
+    CHESTS.forEach((i, k) => { const st = m.slots[k]; slots[i] = st && NAME[st.b] ? st : null; });
+    chestKey = m.key; chestSent = JSON.stringify(CHESTS.map(i => slots[i]));
+    openInv('chest');
+  },
+  cbusy() { toast('他の人がこのチェストを使っている'); },
   wake(m) { wake(true); if (m.msg) toast(m.msg); },
   mshear(m) { const mb = mobs.get(m.id); if (mb) mb.sheared = !!m.v; },
   item(m) { m.it.age = 0; items.push(m.it); },
@@ -2051,7 +2116,7 @@ const saveKey = () => 'blockcraft-save-' + seed + '-' + myName;
 function saveLocal() {
   if (!myId || kicked) return;   // 別タブに切り替わった後は、古いタブから上書きしない
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, bed: P.bed }));
+    localStorage.setItem(saveKey(), JSON.stringify({ slots: slots.slice(0, 54), held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, bed: P.bed }));
   } catch (e) {}
 }
 function loadLocal() {

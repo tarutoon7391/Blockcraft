@@ -18,11 +18,11 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, MAX_BLOCK = 44;   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, MAX_BLOCK = 57;   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
-for (let b = 34; b <= MAX_BLOCK; b++) ITEM_IDS.add(b);
-for (let i = 130; i <= 136; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾
+for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
+for (let i = 130; i <= 140; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも
 for (let tier = 2; tier < 5; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== BEDROCK;   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
@@ -31,11 +31,13 @@ const num = v => typeof v === 'number' && Number.isFinite(v);
 // ---------- ワールドの保存・読み込み ----------
 let seed = process.env.SEED ? Number(process.env.SEED) | 0 : (Math.random() * 1e9) | 0, tod = process.env.TOD ? Number(process.env.TOD) : 0.3;   // SEED を指定すると新規ワールドの地形を固定できる
 const edits = new Map();   // "x,y,z" → ブロックID
+const chests = new Map();  // "x,y,z" → { slots: 27枠の中身, user: 開いているプレイヤーID(0=誰も開いていない) }
 let dirty = false;
 try {
   const w = JSON.parse(fs.readFileSync(FILE, 'utf8'));
   seed = w.seed; tod = w.tod || 0.3;
   for (const k in w.edits) edits.set(k, w.edits[k]);
+  for (const k in (w.chests || {})) chests.set(k, { slots: w.chests[k], user: 0 });
   console.log(`ワールド読み込み: seed=${seed} 変更ブロック=${edits.size}`);
 } catch (e) {
   console.log(`新しいワールドを作成: seed=${seed}`);
@@ -45,7 +47,7 @@ function save() {
   if (!dirty) return;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits) }));
+    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits), chests: Object.fromEntries([...chests].map(([k, c]) => [k, c.slots])) }));
     fs.renameSync(FILE + '.tmp', FILE);   // 書き込み途中で落ちても壊れないよう、別名で書いてから差し替える
     dirty = false;
   } catch (e) { console.error('保存失敗:', e.message); }
@@ -75,14 +77,14 @@ const server = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server, maxPayload: 16 * 1024 });
 const crops = new Set();     // 育ち途中の小麦がある場所（"x,y,z"）
 const saplings = new Set();  // 苗木がある場所
-for (const [k, b] of edits) { if (b >= WHEAT0 && b < WHEAT3) crops.add(k); if (b === SAPLING) saplings.add(k); }
+for (const [k, b] of edits) { if ((b >= WHEAT0 && b < WHEAT3) || (b >= 50 && b <= 52) || (b >= 54 && b <= 56)) crops.add(k); if (b === SAPLING) saplings.add(k); }
 const players = new Map();   // id → { id, name, x, y, z, yaw, pitch, sn, ws, moved }
 const items = new Map();     // id → 落ちているアイテム
 const mobs = new Map();      // id → { id, kind, x, y, z, yaw, hp, owner }
 let nextPlayer = 1, nextItem = 1, nextMob = 1;
 // モブの体力と、倒した時に落とす物 [アイテム, 最小, 最大]
 const MOB_DEF = {
-  zombie: { hp: 20, hostile: true, drop: [126, 0, 1] },
+  zombie: { hp: 20, hostile: true, drop: [126, 0, 1], rare: [138, 139] },   // rare: 15% で代わりに落とす物（にんじん・じゃがいも）
   pig: { hp: 10, drop: [120, 1, 2] },
   cow: { hp: 10, drop: [122, 1, 2] },
   chicken: { hp: 4, drop: [124, 1, 1] },
@@ -107,9 +109,11 @@ function spawnItem(it, by) {
 }
 const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
 
+// 育ち途中の作物か（小麦 25〜27、にんじん 50〜52、じゃがいも 54〜56。それぞれ次の番号が1段階先）
+const growing = b => (b >= WHEAT0 && b < WHEAT3) || (b >= 50 && b <= 52) || (b >= 54 && b <= 56);
 // 作物・苗木の場所を覚えておく（成長させる対象）
 function track(key, b) {
-  if (b >= WHEAT0 && b < WHEAT3) crops.add(key); else crops.delete(key);
+  if (growing(b)) crops.add(key); else crops.delete(key);
   if (b === SAPLING) saplings.add(key); else saplings.delete(key);
 }
 // 寝ている人を数えて、全員寝ていたら朝にする
@@ -136,6 +140,14 @@ const handlers = {
     edits.set(key, b); dirty = true;
     track(key, b);
     broadcast({ t: 'set', x, y, z, b }, p.ws);
+    const ch = chests.get(key);
+    if (ch && b !== CHEST) {   // チェストが壊された → 中身をその場に落とす
+      chests.delete(key);
+      const u = players.get(ch.user);
+      if (u) sendTo(u.ws, { t: 'cbusy' });
+      for (const st of ch.slots) if (st) spawnItem({ b: st.b, n: st.n, d: st.d, x: x + 0.5, y: y + 0.3, z: z + 0.5,
+        vx: (Math.random() - 0.5) * 2, vy: 2.5, vz: (Math.random() - 0.5) * 2, delay: 0.4 }, p.id);
+    }
     if (b === 0 && Array.isArray(m.drop)) {   // 壊した時のドロップ（小麦は 小麦＋種 のように複数ある）
       for (const d of m.drop.slice(0, 4)) {
         if (validItem(d)) spawnItem({ b: d, n: 1, x: x + 0.5, y: y + 0.3, z: z + 0.5,
@@ -158,6 +170,35 @@ const handlers = {
     }
     if (ok.length) broadcast({ t: 'sets', l: ok }, p.ws);
   },
+  // ---- チェスト ----
+  // 中身はサーバーが持つ。同時に開けるのは1人だけ（2人が同時にいじって物が増えたり消えたりしないように）
+  copen(p, m) {
+    const { x, y, z } = m;
+    if (![x, y, z].every(Number.isInteger)) return;
+    const key = x + ',' + y + ',' + z;
+    if (edits.get(key) !== CHEST || (p.x - x) ** 2 + (p.z - z) ** 2 > 100) return;
+    let ch = chests.get(key);
+    if (!ch) { ch = { slots: Array(27).fill(null), user: 0 }; chests.set(key, ch); }
+    if (ch.user && ch.user !== p.id && players.has(ch.user)) { sendTo(p.ws, { t: 'cbusy' }); return; }
+    for (const c of chests.values()) if (c.user === p.id) c.user = 0;   // 前に開いていた物は閉じた扱い
+    ch.user = p.id;
+    sendTo(p.ws, { t: 'copen', key, slots: ch.slots });
+  },
+  // 開いている人から、中身が変わるたびに全体が送られてくる
+  cput(p, m) {
+    const ch = chests.get(m.key);
+    if (!ch || ch.user !== p.id || !Array.isArray(m.slots) || m.slots.length !== 27) return;
+    const out = [];
+    for (const st of m.slots) {
+      if (st == null) { out.push(null); continue; }
+      if (typeof st !== 'object' || !validItem(st.b) || !Number.isInteger(st.n) || st.n < 1 || st.n > 64) return;   // おかしな中身は丸ごと受け付けない
+      const o = { b: st.b, n: st.n };
+      if (num(st.d)) o.d = st.d;
+      out.push(o);
+    }
+    ch.slots = out; dirty = true;
+  },
+  cclose(p, m) { const ch = chests.get(m.key); if (ch && ch.user === p.id) ch.user = 0; },
   // ベッドに入った・出た
   sleep(p, m) {
     if (m.v && !isNight()) { sendTo(p.ws, { t: 'wake', msg: '寝られるのは夜だけ' }); return; }
@@ -221,8 +262,9 @@ const handlers = {
     if (mob.hp > 0) { broadcast({ t: 'mhurt', id: mob.id, kx: clampK(m.kx), kz: clampK(m.kz) }); return; }
     mobs.delete(mob.id);
     broadcast({ t: 'mrm', id: mob.id });
-    const [item, lo, hi] = MOB_DEF[mob.kind].drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
-    if (n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    const def = MOB_DEF[mob.kind], [item, lo, hi] = def.drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
+    if (def.rare && Math.random() < 0.15) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    else if (n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
   },
   // ゾンビが誰かを殴った（ゾンビを動かしているブラウザからの報告）
   mattack(p, m) {
@@ -261,7 +303,7 @@ const handlers = {
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
   hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
-  sets: [2, 6], sleep: [2, 6], shear: [4, 8],
+  sets: [2, 6], sleep: [2, 6], shear: [4, 8], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
@@ -331,6 +373,7 @@ wss.on('connection', ws => {
   ws.on('close', () => {
     if (!p || players.get(p.id) !== p) return;   // 二重ログインで切った側は admit で退出済み
     players.delete(p.id);
+    for (const c of chests.values()) if (c.user === p.id) c.user = 0;   // 開いたまま切断したチェストを解放
     broadcast({ t: 'leave', id: p.id });
     if (!players.size) mobs.clear();   // 誰もいなくなったらモブは消す
     else checkSleep();                 // 起きていた人が抜けて、残り全員が寝ている場合
@@ -358,6 +401,7 @@ setInterval(() => {
     const gone = !near || nd > 96 * 96 || (!night && MOB_DEF[m.kind].hostile && Math.random() < 0.4);   // 誰もいない・朝のゾンビ
     if (gone) { mobs.delete(m.id); broadcast({ t: 'mrm', id: m.id }); continue; }
     if (m.sheared && Date.now() - m.shearAt > (FAST ? 2000 : 90000)) { m.sheared = false; broadcast({ t: 'mshear', id: m.id, v: 0 }); }   // 羊の毛が生えそろう
+    if (m.kind === 'chicken' && Math.random() < (FAST ? 0.5 : 0.02)) spawnItem({ b: 137, n: 1, x: m.x, y: m.y + 0.2, z: m.z, vx: 0, vy: 1, vz: 0, delay: 0.4 }, 0);   // 鶏が卵を産む（1羽あたり平均2分半に1個）
     const owner = players.get(m.owner);
     if (!owner || dist2(m, owner) > nd + 24 * 24) { m.owner = near.id; broadcast({ t: 'mown', id: m.id, owner: near.id }); }   // 一番近い人が動かす
   }
@@ -375,7 +419,7 @@ setInterval(() => {
     if (Math.random() > (FAST ? 1 : 0.06)) continue;
     const b = edits.get(key) + 1;
     edits.set(key, b); dirty = true;
-    if (b >= WHEAT3) crops.delete(key);
+    if (!growing(b)) crops.delete(key);
     const [x, y, z] = key.split(',').map(Number);
     broadcast({ t: 'set', x, y, z, b });
   }
