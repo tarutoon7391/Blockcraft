@@ -22,6 +22,10 @@
   .tbtn { position: fixed; right: 24px; width: 64px; height: 64px; border-radius: 50%; border: 2px solid #fffa;
     background: #fff3; color: #fff; font-size: 12px; display: none; align-items: center; justify-content: center; touch-action: none; }
   #jump { bottom: 96px; } #bag { bottom: 176px; }
+  #tbar { position: fixed; top: 8px; right: 8px; display: none; gap: 6px; z-index: 4; }
+  #tbar div { min-width: 52px; height: 36px; padding: 0 6px; box-sizing: border-box; border-radius: 8px; border: 2px solid #fffa; background: #fff3; color: #fff;
+    font-size: 12px; display: flex; align-items: center; justify-content: center; touch-action: none; }
+  #tbar div.on { background: #fffa; color: #222; }
   #err { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: #222; color: #fff; padding: 24px; text-align: center; z-index: 20; }
 
   .slot { width: 40px; height: 40px; background: #8b8b8b; border: 2px solid; border-color: #373737 #fff #fff #373737; position: relative; box-sizing: border-box; }
@@ -106,6 +110,7 @@ T 時間を進める / 作業台・かまどは右クリックで開く
 <div id="hotbar"></div>
 <div id="jump" class="tbtn">JUMP</div>
 <div id="bag" class="tbtn">バッグ</div>
+<div id="tbar"><div id="tchat">チャット</div><div id="tdrop">捨てる</div><div id="tfly">飛行</div><div id="tsneak">しゃがむ</div></div>
 <div id="inv">
   <div id="panel">
     <div id="top">
@@ -129,7 +134,7 @@ T 時間を進める / 作業台・かまどは右クリックで開く
   <button id="go">ワールドに入る</button>
   <p>WASD 移動 ・ マウス 視点 ・ Space ジャンプ ・ W 2回押しでダッシュ ・ Shift スニーク<br>左クリック長押し 破壊 ・ 右クリック 設置 ・ E インベントリ ・ Q 捨てる<br>左クリックで人やモブを攻撃 ・ 食べ物を持って右クリックで食べる<br>Enter チャット ・ T 時間を進める ・ スマホ: 左でスティック移動、右で視点</p>
 </div>
-<div id="lost"><div>サーバーとの接続が切れた</div><button onclick="location.reload()">入り直す</button></div>
+<div id="lost"><div id="lostmsg">サーバーとの接続が切れた</div><button id="rejoin">入り直す</button></div>
 <div id="err">このブラウザは WebGL2 に対応していないため表示できません。</div>
 <script>
 'use strict';
@@ -818,7 +823,7 @@ function update(dt) {
   let ix = on ? (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + joy.x : 0;
   let iz = on ? (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + joy.y : 0;
   const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
-  const shift = on && (keys.ShiftLeft || keys.ShiftRight), jump = on && (keys.Space || joy.jump);
+  const shift = on && (keys.ShiftLeft || keys.ShiftRight || joy.sneak), jump = on && (keys.Space || joy.jump);
   P.sneak = shift && !P.fly && !inWater;
   // ダッシュ: W 2回押しで開始、W を離す・スニーク・スタミナ切れで終了
   if (!keys.KeyW || P.sneak || P.tired || P.st <= 0) P.sprint = false;
@@ -934,9 +939,17 @@ function tryPlace() {
   if (y < 0 || y >= H || opaque(getBlock(x, y, z))) return;
   // プレイヤーと重なる位置には置けない
   if (x + 1 > P.x - PW && x < P.x + PW && z + 1 > P.z - PW && z < P.z + PW && y + 1 > P.y && y < P.y + PH) return;
+  if (occupied(x, y, z)) return;
   netSet(x, y, z, st.b, getBlock(x, y, z));
   if (--st.n <= 0) slots[sel] = null;
   refreshUI();
+}
+// 他のプレイヤー・モブと重なる位置か（そこにはブロックを置けない）
+function occupied(x, y, z) {
+  const hit = (px, py, pz, w, h) => x + 1 > px - w && x < px + w && z + 1 > pz - w && z < pz + w && y + 1 > py && y < py + h;
+  for (const p of others.values()) if (p.ty > -50 && hit(p.x, p.y, p.z, PW, PH)) return true;
+  for (const m of mobs.values()) { const K = MOBS[m.kind]; if (K && hit(m.x, m.y, m.z, K.w, K.h)) return true; }
+  return false;
 }
 // 右クリック: 作業台・かまどを開く → 食べる → クワで耕す → 種を植える → ブロックを置く の順で判定
 function useItem() {
@@ -1432,7 +1445,7 @@ addEventListener('keydown', e => {
   if (!started) return;
   if (chatOpen) {   // 日本語入力の変換確定の Enter では送信しない
     if (e.isComposing || e.keyCode === 229) return;
-    if (e.code === 'Enter' || e.code === 'NumpadEnter') { const text = chatIn.value.trim(); if (text) send({ t: 'chat', text }); closeChat(); }
+    if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); const text = chatIn.value.trim(); if (text) send({ t: 'chat', text }); closeChat(); }
     else if (e.code === 'Escape') closeChat();
     return;
   }
@@ -1452,13 +1465,15 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyT') send({ t: 'skip' });
   if (e.code === 'BracketLeft') fov = Math.max(40, fov - 2);
   if (e.code === 'BracketRight') fov = Math.min(100, fov + 2);
-  if (e.code === 'KeyQ' && slots[sel]) {
-    throwStack(slots[sel].b, 1, slots[sel].d);
-    if (--slots[sel].n <= 0) slots[sel] = null;
-    refreshUI();
-  }
+  if (e.code === 'KeyQ') dropOne();
   if (/^Digit[1-9]$/.test(e.code)) { sel = +e.code[5] - 1; refreshUI(); }
 });
+function dropOne() {   // 手に持っている物を1個捨てる（Q キー・スマホの「捨てる」）
+  if (!slots[sel]) return;
+  throwStack(slots[sel].b, 1, slots[sel].d);
+  if (--slots[sel].n <= 0) slots[sel] = null;
+  refreshUI();
+}
 addEventListener('keyup', e => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
 // タッチ: 左半分=移動スティック、右半分=視点（タップ=設置、長押し=破壊）
@@ -1500,6 +1515,25 @@ function touchEnd(e) {
 canvas.addEventListener('touchend', touchEnd); canvas.addEventListener('touchcancel', touchEnd);
 $('jump').addEventListener('touchstart', e => { e.preventDefault(); joy.jump = true; }, { passive: false });
 $('jump').addEventListener('touchend', () => { joy.jump = false; });
+$('jump').addEventListener('touchcancel', () => { joy.jump = false; });
+// スマホ用の小さいボタン（右上）: チャット・捨てる・飛行・しゃがむ（飛行中は下降）
+canvas.addEventListener('touchstart', () => { $('tbar').style.display = 'flex'; }, { once: true, passive: true });
+const tbtn = (id, fn) => $(id).addEventListener('touchend', e => { e.preventDefault(); if (started) fn(); }, { passive: false });
+tbtn('tchat', () => { if (chatOpen) closeChat(); else if (!invOpen) openChat(); });
+tbtn('tdrop', () => { if (active()) dropOne(); });
+tbtn('tfly', () => { P.fly = !P.fly; P.vy = 0; $('tfly').classList.toggle('on', P.fly); });
+tbtn('tsneak', () => { joy.sneak = !joy.sneak; $('tsneak').classList.toggle('on', joy.sneak); });
+// スマホのキーボードは Enter が keydown で届かないことがあるので、フォームの送信でも送れるようにする
+{
+  const form = document.createElement('form'), input = $('chatin');
+  input.before(form); form.appendChild(input);
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    if (!chatOpen) return;
+    const text = chatIn.value.trim(); if (text) send({ t: 'chat', text });
+    closeChat();
+  });
+}
 $('bag').addEventListener('touchstart', e => { e.preventDefault(); if (started) openInv(); }, { passive: false });
 invEl.addEventListener('touchend', e => { if (e.target === invEl && !held) { e.preventDefault(); closeInv(); } });
 
@@ -1583,26 +1617,85 @@ const NET = {
   chat(m) { addChat(m.name, m.text); },
 };
 function connect(name) {
+  myName = name;
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
-  ws.onopen = () => send({ t: 'join', name });
+  ws.onopen = () => send({ t: 'join', name, cid: clientId() });
   ws.onmessage = ev => {
+    lastMsg = Date.now();
     let m;
     try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.t === 'init') {   // 入れたので再接続の回数をリセット
+      try { sessionStorage.removeItem('blockcraft-retry'); } catch (e) {}
+      if (autoJoined) setTimeout(() => addChat('', '再接続した（クリックで操作を再開）'), 0);
+    }
     if (NET[m.t]) NET[m.t](m);
   };
-  ws.onclose = () => { online = false; saveLocal(); $('lost').style.display = 'flex'; };
+  ws.onclose = ev => connectionLost(ev.code);
 }
-// 持ち物・位置・体力はブラウザに保存（ワールドごと）。同じブラウザで入り直すと続きから
-const saveKey = () => 'blockcraft-save-' + seed;
-function saveLocal() {
-  if (!myId) return;
+// ---------- 切断と再接続 ----------
+// サーバーの再起動（Railway の再デプロイ）や回線断で切れたら、サーバーが戻るのを待ってページを読み直し、
+// 同じ名前で自動で入り直す。持ち物・位置・飛行中かは saveLocal で保存しているので続きから遊べる。
+let myName = '', kicked = false, lostAt = 0, lastMsg = 0, autoJoined = false;
+const RETRY_MAX = 5;   // 入れないまま読み直しがこの回数続いたら、自動はやめてボタン待ちにする
+function clientId() {   // このブラウザの目印（同じブラウザの二重ログインを見分ける用。サーバーにだけ送る）
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp }));
+    let c = localStorage.getItem('blockcraft-cid');
+    if (!c) { c = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('blockcraft-cid', c); }
+    return c;
+  } catch (e) { return ''; }
+}
+function rejoin() {
+  try { sessionStorage.setItem('blockcraft-autojoin', '1'); } catch (e) {}
+  location.reload();
+}
+function connectionLost(code) {
+  if (lostAt) return;
+  lostAt = Date.now();
+  if (code === 4000) kicked = true;   // 同じブラウザの別タブから入り直された
+  if (!kicked) saveLocal();
+  online = false; started = false;
+  if (ws) { ws.onclose = null; try { ws.close(); } catch (e) {} }
+  for (const k in keys) keys[k] = false;
+  mouse.l = mouse.r = false; joy.x = joy.y = 0; joy.jump = false;
+  if (document.exitPointerLock) document.exitPointerLock();
+  $('lost').style.display = 'flex';
+  const msg = $('lostmsg');
+  if (kicked) { msg.textContent = 'このブラウザの別のタブから同じ名前で入ったので、こちらは切断された'; return; }
+  let retry = 0;
+  try { retry = +sessionStorage.getItem('blockcraft-retry') || 0; } catch (e) {}
+  if (retry >= RETRY_MAX) { msg.textContent = 'サーバーにつながらない。少し待ってから「入り直す」を押してね'; return; }
+  const poll = async () => {
+    msg.textContent = `サーバーとの接続が切れた。復旧を待って自動で入り直します…（${Math.round((Date.now() - lostAt) / 1000)}秒）`;
+    try {
+      const r = await fetch('/health', { cache: 'no-store' });
+      if (r.ok) { try { sessionStorage.setItem('blockcraft-retry', String(retry + 1)); } catch (e) {} rejoin(); return; }
+    } catch (e) {}
+    setTimeout(poll, 2000);
+  };
+  poll();
+}
+$('rejoin').addEventListener('click', () => { try { sessionStorage.removeItem('blockcraft-retry'); } catch (e) {} rejoin(); });
+// サーバーからは5秒ごとに時刻が届く。25秒なにも届かなければ、切れているとみなす（スリープ復帰など）
+setInterval(() => { if (online && Date.now() - lastMsg > 25000) connectionLost(); }, 5000);
+// 持ち物・位置・体力・飛行中かはブラウザに保存（ワールド×名前ごと）。同じブラウザで同じ名前で入り直すと続きから
+const saveKey = () => 'blockcraft-save-' + seed + '-' + myName;
+function saveLocal() {
+  if (!myId || kicked) return;   // 別タブに切り替わった後は、古いタブから上書きしない
+  try {
+    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, fly: P.fly }));
   } catch (e) {}
 }
 function loadLocal() {
   let s;
-  try { s = JSON.parse(localStorage.getItem(saveKey())); } catch (e) {}
+  try {
+    let raw = localStorage.getItem(saveKey());
+    if (raw == null) {   // 名前ごとに分ける前の保存（blockcraft-save-<seed>）があれば、この名前に引き継ぐ
+      const old = 'blockcraft-save-' + seed;
+      raw = localStorage.getItem(old);
+      if (raw != null) { localStorage.setItem(saveKey(), raw); localStorage.removeItem(old); }
+    }
+    s = JSON.parse(raw);
+  } catch (e) {}
   if (!s || !Array.isArray(s.slots)) return;
   const ok = st => st && NAME[st.b] && Number.isInteger(st.n) && st.n > 0 && st.n <= STACK;
   const OLD = { 110: 200, 111: 201, 112: 202, 113: 210, 114: 211, 115: 212 };   // 旧ツールIDの読み替え
@@ -1614,6 +1707,12 @@ function loadLocal() {
     P.x = s.x; P.y = s.y; P.z = s.z; P.yaw = s.yaw || 0; P.pitch = s.pitch || 0;
   }
   if (s.hp > 0 && s.hp <= 20) P.hp = s.hp;
+  // 飛んでいる最中に切れた人は、飛んだまま再開する（でないと入り直した瞬間に墜落する）。
+  // 飛行を保存していなかった頃のデータは、足元が5マス以上空いていたら飛行中だったとみなす
+  let air = 0;
+  while (air < 5 && P.y - 1 - air > 0 && !opaque(getBlock(Math.floor(P.x), Math.floor(P.y) - 1 - air, Math.floor(P.z)))) air++;
+  if (s.fly === true || (s.fly === undefined && air >= 5)) P.fly = true;
+  $('tfly').classList.toggle('on', P.fly);
 }
 addEventListener('pagehide', saveLocal);
 // 自分の位置を 1秒に10回送る（変化があった時だけ）
@@ -1974,6 +2073,8 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 refreshUI();
+// 切断から自動で読み直した時は、名前入力を飛ばしてそのまま入る
+try { if (sessionStorage.getItem('blockcraft-autojoin')) { sessionStorage.removeItem('blockcraft-autojoin'); autoJoined = true; enter(); } } catch (e) {}
 </script>
 </body>
 </html>

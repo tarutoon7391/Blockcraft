@@ -201,15 +201,63 @@ const handlers = {
   },
 };
 
+// ---------- 接続の管理（連打制限・二重ログイン・接続確認） ----------
+// 1人あたり・種類ごとの上限 [1秒に何回, まとめて何回まで]。超えた分は黙って捨てる。
+// 普通に遊んでいて届く回数よりかなり多めにしてある（改造したブラウザからの連打・アイテム湧かせを防ぐ用）。
+// チャットは制限しない。ここに無い種類は DEFAULT_RATE。新しい種類を足して回数が多いならここにも足すこと。
+const RATE = {
+  pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
+  hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3], skip: [0.5, 3],
+};
+const DEFAULT_RATE = [30, 60];
+const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
+function allow(p, m) {
+  if (players.get(p.id) !== p) return false;   // 二重ログインで切られた側の残りのメッセージ
+  if (m.t === 'chat') return true;
+  if (m.t === 'set' && !(Math.abs(m.x) <= WORLD_LIMIT && Math.abs(m.z) <= WORLD_LIMIT)) return false;
+  const [rate, burst] = RATE[m.t] || DEFAULT_RATE, now = Date.now();
+  const b = p.bucket || (p.bucket = {}), s = b[m.t] || (b[m.t] = { tk: burst, at: now });
+  s.tk = Math.min(burst, s.tk + (now - s.at) / 1000 * rate); s.at = now;
+  if (s.tk < 1) return false;
+  s.tk--;
+  return true;
+}
+// 同じブラウザ（cid が同じ）から同じ名前でまた入ってきたら、古い方を切る（別タブ・回線断で残った接続）。
+// 同じブラウザでも名前が違えば別プレイヤー扱い（タブ2つで2人プレイの確認ができるように）。
+// 別の人と名前がかぶったら「名前(2)」にして区別する。
+function admit(name, cid) {
+  if (cid) for (const q of players.values()) if (q.cid === cid && q.base === name) {
+    players.delete(q.id);
+    broadcast({ t: 'leave', id: q.id });
+    console.log(`二重ログインのため切断: ${q.name}`);
+    q.ws.close(4000, 'duplicate');   // 4000 を受け取ったブラウザは自動で入り直さない
+  }
+  let n = name, k = 2;
+  while ([...players.values()].some(q => q.name === n)) n = `${name}(${k++})`;
+  return n;
+}
+// 接続確認: 20秒ごとに ping を送り、次の回までに返事が無い接続は切る
+// （スマホのスリープや回線断で、いない人がずっと立ったままになるのを防ぐ）
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (!ws.isAlive) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch (e) {}
+  }
+}, 20000);
+
 wss.on('connection', ws => {
   let p = null;
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   ws.on('message', raw => {
     let m;
     try { m = JSON.parse(raw); } catch (e) { return; }
     if (!m || typeof m !== 'object') return;
     if (!p) {
       if (m.t !== 'join') return;
-      p = { id: nextPlayer++, name: clean(m.name, 16) || 'プレイヤー', x: 0, y: -100, z: 0, yaw: 0, pitch: 0, sn: 0, ws, moved: false };
+      const cid = clean(m.cid, 40), base = clean(m.name, 16) || 'プレイヤー';
+      p = { id: nextPlayer++, name: admit(base, cid), base, cid, x: 0, y: -100, z: 0, yaw: 0, pitch: 0, sn: 0, ws, moved: false };
       const now = Date.now();
       sendTo(ws, {
         t: 'init', id: p.id, seed, tod,
@@ -224,10 +272,10 @@ wss.on('connection', ws => {
       return;
     }
     const h = handlers[m.t];
-    if (h) h(p, m);
+    if (h && allow(p, m)) h(p, m);
   });
   ws.on('close', () => {
-    if (!p) return;
+    if (!p || players.get(p.id) !== p) return;   // 二重ログインで切った側は admit で退出済み
     players.delete(p.id);
     broadcast({ t: 'leave', id: p.id });
     if (!players.size) mobs.clear();   // 誰もいなくなったらモブは消す
