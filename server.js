@@ -22,7 +22,7 @@ const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, MAX_BLOCK = 57;   // 45=�
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
-for (let i = 130; i <= 140; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも
+for (let i = 130; i <= 146; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 5; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== BEDROCK;   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
@@ -86,10 +86,12 @@ const mobs = new Map();      // id → { id, kind, x, y, z, yaw, hp, owner }
 let nextPlayer = 1, nextItem = 1, nextMob = 1;
 // モブの体力と、倒した時に落とす物 [アイテム, 最小, 最大]
 const MOB_DEF = {
-  zombie: { hp: 20, hostile: true, drop: [126, 0, 1], rare: [138, 139] },   // rare: 15% で代わりに落とす物（にんじん・じゃがいも）
+  zombie: { hp: 20, hostile: true, atk: 3, name: 'ゾンビ', drop: [126, 0, 1], rare: [138, 139] },
+  spider: { hp: 16, hostile: true, atk: 2, name: 'クモ', drop: [141, 0, 2] },                               // 糸
+  skeleton: { hp: 20, hostile: true, atk: 3, name: '骨の射手', drop: [143, 0, 2], extra: [145, 0, 2] },   // 骨と矢   // rare: 15% で代わりに落とす物（にんじん・じゃがいも）
   pig: { hp: 10, drop: [120, 1, 2] },
   cow: { hp: 10, drop: [122, 1, 2] },
-  chicken: { hp: 4, drop: [124, 1, 1] },
+  chicken: { hp: 4, drop: [124, 1, 1], extra: [142, 0, 2] },   // 肉と羽
   sheep: { hp: 8, drop: [WOOL, 1, 1] },
 };
 const ANIMALS = ['pig', 'cow', 'chicken', 'sheep'];
@@ -253,7 +255,7 @@ const handlers = {
   // プレイヤーを殴った → 殴られた本人のブラウザに伝える（体力は各自のブラウザが持っている）
   hit(p, m) {
     const q = players.get(m.id);
-    if (!q || q === p || !num(m.dmg) || dist2(p, q) > 36) return;
+    if (!q || q === p || !num(m.dmg) || dist2(p, q) > (m.ranged ? 60 * 60 : 36)) return;   // ranged: 矢
     sendTo(q.ws, { t: 'hurt', dmg: Math.max(1, Math.min(12, Math.floor(m.dmg))), kx: clampK(m.kx), kz: clampK(m.kz), cause: p.name });
   },
   // モブを殴った → 体力はサーバーが持つ
@@ -265,15 +267,26 @@ const handlers = {
     mobs.delete(mob.id);
     broadcast({ t: 'mrm', id: mob.id });
     const def = MOB_DEF[mob.kind], [item, lo, hi] = def.drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
-    if (def.rare && Math.random() < 0.15) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
-    else if (n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    const rareHit = def.rare && Math.random() < 0.15;
+    if (rareHit) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    if (def.extra) {   // 2種類目のドロップ
+      const k = def.extra[1] + Math.floor(Math.random() * (def.extra[2] - def.extra[1] + 1));
+      if (k > 0) spawnItem({ b: def.extra[0], n: k, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0.8, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    }
+    if (!rareHit && n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
   },
   // ゾンビが誰かを殴った（ゾンビを動かしているブラウザからの報告）
   mattack(p, m) {
     const mob = mobs.get(m.id), q = players.get(m.target);
-    if (!mob || mob.owner !== p.id || !MOB_DEF[mob.kind].hostile || !q || dist2(mob, q) > 16) return;
+    if (!mob || mob.owner !== p.id || !MOB_DEF[mob.kind].hostile || !q || dist2(mob, q) > (m.ranged ? 30 * 30 : 16)) return;
     const l = Math.hypot(q.x - mob.x, q.z - mob.z) || 1;
-    sendTo(q.ws, { t: 'hurt', dmg: 3, kx: (q.x - mob.x) / l * 5, kz: (q.z - mob.z) / l * 5, cause: 'ゾンビ' });
+    const def = MOB_DEF[mob.kind], kb = m.ranged ? 4 : 5;
+    sendTo(q.ws, { t: 'hurt', dmg: def.atk, kx: (q.x - mob.x) / l * kb, kz: (q.z - mob.z) / l * kb, cause: def.name });
+  },
+  // 矢を撃った（他の人の画面にも同じ矢を飛ばすための合図。当たり判定は撃った側がやる）
+  shoot(p, m) {
+    if (![m.x, m.y, m.z, m.vx, m.vy, m.vz].every(num) || dist2(p, m) > 40 * 40) return;
+    broadcast({ t: 'arrow', x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz }, p.ws);
   },
   died(p, m) {
     const cause = clean(m.cause, 20);
@@ -305,7 +318,7 @@ const handlers = {
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
   hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
-  sets: [2, 6], sleep: [2, 6], shear: [4, 8], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
+  sets: [2, 6], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
@@ -411,7 +424,7 @@ setInterval(() => {
   for (const p of ps) {
     let z = 0, a = 0;
     for (const m of mobs.values()) if (dist2(m, p) < 64 * 64) { if (MOB_DEF[m.kind].hostile) z++; else a++; }
-    if (night && z < 5) sendTo(p.ws, { t: 'wantspawn', kind: 'zombie' });
+    if (night && z < 5) { const r = Math.random(); sendTo(p.ws, { t: 'wantspawn', kind: r < 0.5 ? 'zombie' : r < 0.75 ? 'spider' : 'skeleton' }); }
     else if (!night && a < 6) sendTo(p.ws, { t: 'wantspawn', kind: ANIMALS[Math.floor(Math.random() * ANIMALS.length)] });
   }
 }, FAST ? 300 : 3000);

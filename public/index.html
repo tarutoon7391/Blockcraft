@@ -155,7 +155,8 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
   CLOCK = 130, SHEARS = 131, BUCKET = 132, WATER_BUCKET = 133, APPLE = 134, GOLDEN_APPLE = 135, SHIELD = 136,
-  EGG = 137, CARROT = 138, POTATO = 139, BAKED_POTATO = 140;   // 防具は 300 番台
+  EGG = 137, CARROT = 138, POTATO = 139, BAKED_POTATO = 140,
+  STRING = 141, FEATHER = 142, BONE = 143, BONE_MEAL = 144, ARROW = 145, BOW = 146;   // 防具は 300 番台
 // ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
@@ -283,6 +284,9 @@ FOOD[CARROT] = 3; FOOD[POTATO] = 1; FOOD[BAKED_POTATO] = 5;
 SMELT[POTATO] = BAKED_POTATO;
 // 耕した土に植えられる物 → 最初の段階のブロック
 const PLANTABLE = { [SEEDS]: WHEAT0, [CARROT]: CARROT0, [POTATO]: POTATO0 };
+// ---- 弓矢と新しい敵（第4弾） ----
+Object.assign(NAME, { [STRING]: '糸', [FEATHER]: '羽', [BONE]: '骨', [BONE_MEAL]: '骨粉', [ARROW]: '矢', [BOW]: '弓' });
+TOOLS[BOW] = { type: 'bow', tier: 0, speed: 1, dur: 384, lvl: 0, dmg: 1 };   // 右クリック長押しで引いて、離すと撃つ
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -1062,6 +1066,24 @@ const SPR = {}, SPR_IDS = [];
     for (const [x, y] of [[5, 7], [9, 10], [10, 6]]) set(x, y, dk.map(v => v - 30));
   };
   mk(POTATO, potato([206, 170, 104], [170, 132, 72])); mk(BAKED_POTATO, potato([226, 178, 84], [176, 118, 44]));
+  mk(STRING, set => { for (let i = 0; i < 12; i++) { set(2 + i, 3 + Math.round(4 + 3 * Math.sin(i * 0.9)), [236, 236, 236]); set(2 + i, 4 + Math.round(4 + 3 * Math.sin(i * 0.9)), [190, 190, 190]); } });
+  mk(FEATHER, set => {
+    for (let i = 0; i < 11; i++) { set(3 + i, 12 - i, [150, 150, 150]); if (i > 2) for (let w = 1; w <= Math.min(3, 12 - i); w++) { set(3 + i - w, 12 - i, [250, 250, 250]); set(3 + i, 12 - i + w, [222, 222, 226]); } }
+  });
+  mk(BONE, set => {
+    for (let i = 0; i < 8; i++) { set(4 + i, 11 - i, [240, 238, 226]); set(5 + i, 11 - i, [206, 202, 186]); }
+    for (const [x, y] of [[3, 11], [3, 12], [4, 12], [4, 13], [5, 13], [11, 3], [12, 3], [12, 2], [13, 4], [12, 4], [13, 3]]) set(x, y, [240, 238, 226]);
+  });
+  mk(BONE_MEAL, set => { for (const [x, y] of [[5, 6], [8, 5], [10, 7], [6, 9], [9, 10], [7, 7], [11, 10], [4, 10]]) { set(x, y, [244, 244, 236]); set(x + 1, y, [244, 244, 236]); set(x, y + 1, [204, 204, 192]); set(x + 1, y + 1, [204, 204, 192]); } });
+  mk(ARROW, set => {
+    for (let i = 0; i < 9; i++) set(4 + i, 11 - i, [150, 108, 60]);
+    for (const [x, y] of [[13, 2], [12, 2], [13, 3], [11, 3], [12, 4]]) set(x, y, [170, 170, 178]);
+    for (const [x, y] of [[2, 12], [3, 13], [2, 13], [3, 11], [4, 12], [2, 11], [4, 13]]) set(x, y, [240, 240, 240]);
+  });
+  mk(BOW, set => {
+    each((x, y) => { const d = Math.hypot(x - 3, y - 8); if (d >= 8 && d < 9.6 && x >= 5) set(x, y, d > 8.9 ? [110, 78, 40] : [150, 108, 60]); });
+    for (let y = 1; y <= 14; y++) set(6, y, [226, 226, 226]);
+  });
   // 防具（素材の色だけ変えて使い回す）
   const ARM_DRAW = [
     m => set => { for (let y = 4; y <= 10; y++) for (let x = 3; x <= 12; x++) { if (y === 4 && (x === 3 || x === 12)) continue; if (y >= 8 && x >= 6 && x <= 9) continue; set(x, y, y < 6 ? m[0] : m[1]); } for (let x = 4; x <= 7; x++) set(x, 5, [255, 255, 255]); },
@@ -1392,6 +1414,16 @@ function useItem() {
   }
   if (target && !P.sneak && target.b === BED) { mouse.r = false; useBed(target); return; }
   if (st && (st.b === BUCKET || st.b === WATER_BUCKET)) { if (useBucket(st)) placeCd = 0.4; return; }
+  if (st && st.b === BOW) return;   // 弓は updateInteract で引きを数える
+  if (st && st.b === BONE_MEAL && target) {   // 骨粉: 作物を一気に育てきる、苗木をその場で木にする
+    const { x, y, z, b } = target;
+    let ok = false;
+    if (b === SAPLING) { growTree(x, y, z); ok = getBlock(x, y, z) !== SAPLING; }
+    else if (b >= WHEAT0 && b < WHEAT3) { netSet(x, y, z, WHEAT3, b); ok = true; }
+    else if (b >= CARROT0 && b <= POTATO3 && ((b - CARROT0) & 3) < 3) { netSet(x, y, z, b <= CARROT3 ? CARROT3 : POTATO3, b); ok = true; }
+    if (ok) { if (--st.n <= 0) slots[sel] = null; refreshUI(); placeCd = 0.3; }
+    return;
+  }
   if (st && FOOD[st.b]) {
     if (P.hp < 20) { P.hp = Math.min(20, P.hp + FOOD[st.b]); if (--st.n <= 0) slots[sel] = null; refreshUI(); drawStats(); placeCd = 0.6; }
     return;
@@ -1419,12 +1451,19 @@ function updateInteract(dt) {
     const tool = heldTool(), need = breakTime(target.b, tool);
     if (breakT >= need) {
       breakBlock(target.x, target.y, target.z, target.b, tool);   // ドロップはサーバーが出す
-      if (tool && tool.type !== 'shield' && !isPlant(target.b) && !isTorch(target.b)) useTool();
+      if (tool && tool.type !== 'shield' && tool.type !== 'bow' && !isPlant(target.b) && !isTorch(target.b)) useTool();
       breakT = 0; breakKey = '';
     } else if (need < Infinity) prog = breakT / need;
   } else { breakT = 0; breakKey = ''; }
   if (mouse.r && placeCd <= 0 && active()) { placeCd = 0.25; useItem(); }
   breakProg = prog;
+  // 弓: 右クリックを押している間は引き、離した瞬間に撃つ（1秒で最大）
+  const bowHeld = slots[sel] && slots[sel].b === BOW && active();
+  if (bowHeld && mouse.r) bowT += dt;
+  else { if (bowHeld && bowT > 0.15) fireBow(Math.min(1, bowT)); bowT = 0; }
+  const bar = $('brk');
+  bar.style.display = bowT > 0 ? 'block' : 'none';
+  if (bowT > 0) bar.firstChild.style.width = Math.min(100, bowT * 100).toFixed(0) + '%';
 }
 
 // ---------- ベッド・防具・盾・バケツ・苗木（第2弾） ----------
@@ -1697,6 +1736,9 @@ const nine = (k, a, b2) => [{ p: ['XXX', 'XXX', 'XXX'], k: { X: a }, out: [b2, 1
 RECIPES.push(
   { p: ['WWW', 'PPP'], k: { W: WOOL, P: PLANKS }, out: [BED, 1] },
   { p: ['PPP', 'P P', 'PPP'], k: { P: PLANKS }, out: [CHEST, 1] },
+  { p: [' SW', 'S W', ' SW'], k: { S: STICK, W: STRING }, out: [BOW, 1] },
+  { p: ['C', 'S', 'F'], k: { C: COBBLE, S: STICK, F: FEATHER }, out: [ARROW, 4] },
+  { p: ['B'], k: { B: BONE }, out: [BONE_MEAL, 3] },
   { p: [' E ', 'WWW'], k: { E: EGG, W: WHEAT }, out: [CAKE0, 1] },
   { p: ['SS', 'SS'], k: { S: STONE }, out: [STONE_BRICK, 4] },
   ...nine(0, IRON_INGOT, IRON_BLOCK), ...nine(0, GOLD_INGOT, GOLD_BLOCK), ...nine(0, DIAMOND, DIAMOND_BLOCK), ...nine(0, COAL, COAL_BLOCK),
@@ -1836,6 +1878,7 @@ for (const R of RECIPES) {
 for (const text of ['ツールは板材を 丸石・鉄インゴット・金インゴット・ダイヤ に変えると上位版になる。防具は鉄を 金・ダイヤ に変えても作れる。',
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
+  '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢は骨の射手、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
   '卵は鶏が時々産む。にんじんとじゃがいもはゾンビが時々落とし、耕した土に植えると増やせる。ケーキは置いて右クリックで4回食べられる。',
   'かまど（材料＋燃料）: 鉄鉱石→鉄 / 金鉱石→金 / 丸石→石 / 原木→石炭 / 生肉→焼いた肉。燃料は石炭・原木・板材・棒。',
   '農業: クワで草ブロックか土を右クリック → 種を植える → 金色になったら収穫。']) {
@@ -2213,6 +2256,7 @@ const NET = {
     }
   },
   hurt(m) { hurtMe(m.dmg, m.kx, m.kz, m.cause); },
+  arrow(m) { arrows.push({ x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, dmg: 0, mob: 0, mine: false, age: 0, stuck: 0 }); },   // 他の人・他の人が動かすモブの矢（見た目だけ）
   wantspawn(m) { pickSpawn(m.kind); },
   chat(m) { addChat(m.name, m.text); },
 };
@@ -2402,7 +2446,9 @@ function updateTags() {
 // モブ（ゾンビ・動物）は「一番近いプレイヤーのブラウザ」が動かして、位置をサーバー経由で全員に配る。
 // サーバーは地形を持たないので、当たり判定が必要な処理はブラウザ側でやる。体力と生死はサーバーが管理する。
 const MOBS = {
-  zombie:  { w: 0.3,  h: 1.8, speed: 2.6, hostile: true },
+  zombie:  { w: 0.3,  h: 1.8, speed: 2.6, hostile: true, atk: 3, name: 'ゾンビ' },
+  spider:  { w: 0.55, h: 0.8, speed: 3.6, hostile: true, atk: 2, name: 'クモ' },                 // 足が速い
+  skeleton: { w: 0.3, h: 1.8, speed: 2.4, hostile: true, atk: 3, name: '骨の射手', ranged: true },   // 離れて矢を撃つ
   pig:     { w: 0.4,  h: 0.9, speed: 1.6 },
   cow:     { w: 0.45, h: 1.3, speed: 1.4 },
   chicken: { w: 0.22, h: 0.7, speed: 1.5 },
@@ -2436,11 +2482,17 @@ function simMob(m, dt) {
   }
   if (tgt) {
     m.dir = Math.atan2(-(tgt[1] - m.x), -(tgt[3] - m.z));
-    sp = best < 0.7 ? 0 : K.speed;
-    if (best < 1.7 * 1.7 && m.atkCd <= 0) {
-      m.atkCd = 1;
-      if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(3, (P.x - m.x) / l * 5, (P.z - m.z) / l * 5, 'ゾンビ'); }
-      else send({ t: 'mattack', id: m.id, target: tgt[0] });
+    if (K.ranged) {   // 骨の射手: 近づきすぎず離れすぎずの距離を保って、2秒ちょっとごとに矢を撃つ
+      const dist = Math.sqrt(best);
+      sp = dist > 12 ? K.speed : dist < 6 ? -K.speed * 0.8 : 0;
+      if (dist < 18 && m.atkCd <= 0) { m.atkCd = 2.2; mobShoot(m, tgt); }
+    } else {
+      sp = best < 0.7 ? 0 : K.speed;
+      if (best < 1.7 * 1.7 && m.atkCd <= 0) {
+        m.atkCd = 1;
+        if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(K.atk, (P.x - m.x) / l * 5, (P.z - m.z) / l * 5, K.name); }
+        else send({ t: 'mattack', id: m.id, target: tgt[0] });
+      }
     }
   } else {
     if (m.aiT <= 0) { m.aiT = 2 + Math.random() * 4; m.moving = Math.random() < 0.6; if (m.flee <= 0) m.dir = Math.random() * Math.PI * 2; }
@@ -2455,7 +2507,7 @@ function simMob(m, dt) {
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(vx), Math.abs(m.vy), Math.abs(vz)) * dt / 0.4)), h = dt / steps;
   let wall = false;
   for (let i = 0; i < steps; i++) wall = mobMove(m, K, vx * h, m.vy * h, vz * h) || wall;
-  if (wall && m.ground && sp > 0) m.vy = 8;   // 段差はジャンプで登る
+  if (wall && m.ground && sp !== 0) m.vy = 8;   // 段差はジャンプで登る
 }
 function updateMobs(dt) {
   const k = Math.min(1, dt * 10);
@@ -2556,7 +2608,25 @@ function drawMobs() {
     if (boxes + 9 > MAXCUBE) break;
     const red = m.hurt > 0, sw = Math.sin(m.phase) * 0.7 * Math.min(1, m.speed / 1.5);
     const B = (pv, sz, off, rx, ct, cs) => { o = pushBox(o, m.x, m.y, m.z, m.yaw, pv, sz, off, rx, tintRed(ct, red), tintRed(cs, red)); boxes++; };
-    if (m.kind === 'zombie') {
+    if (m.kind === 'spider') {   // 平たい体に、左右へ突き出た脚4本と赤い目
+      const SB = [0.17, 0.14, 0.13], SL = [0.10, 0.08, 0.08], SE = [0.85, 0.10, 0.10];
+      B([0, 0.25, 0.3], [0.8, 0.5, 0.8], [0, 0.25, 0], 0, SB, SB);
+      B([0, 0.25, -0.35], [0.5, 0.4, 0.5], [0, 0.2, 0], 0, SB, SB);
+      for (let k = 0; k < 4; k++) B([0, 0.32, -0.4 + k * 0.27], [1.8, 0.08, 0.08], [0, Math.sin(m.phase + k * 1.6) * 0.06 * Math.min(1, m.speed), 0], 0, SL, SL);
+      B([0, 0.25, -0.35], [0.1, 0.1, 0.02], [-0.12, 0.28, -0.26], 0, SE, SE);
+      B([0, 0.25, -0.35], [0.1, 0.1, 0.02], [0.12, 0.28, -0.26], 0, SE, SE);
+    } else if (m.kind === 'skeleton') {   // 細い骨の体。片腕を前に出して弓を構える
+      const BC = [0.90, 0.90, 0.84], BD = [0.72, 0.72, 0.66], WOODC = [0.45, 0.32, 0.18];
+      B([-0.1, 0.675, 0], [0.12, 0.675, 0.12], [0, -0.3375, 0], sw, BD, BD);
+      B([0.1, 0.675, 0], [0.12, 0.675, 0.12], [0, -0.3375, 0], -sw, BD, BD);
+      B([0, 0.675, 0], [0.36, 0.62, 0.16], [0, 0.31, 0], 0, BC, BD);
+      B([-0.26, 1.25, 0], [0.1, 0.62, 0.1], [0, -0.31, 0], 1.4, BC, BC);
+      B([0.26, 1.25, 0], [0.1, 0.62, 0.1], [0, -0.31, 0], 0.4, BC, BC);
+      B([-0.26, 1.25, 0], [0.05, 0.7, 0.05], [0, 0, -0.62], 0, WOODC, WOODC);   // 弓
+      B([0, 1.32, 0], [0.42, 0.42, 0.42], [0, 0.21, 0], 0, BC, BC);
+      B([0, 1.32, 0], [0.1, 0.1, 0.02], [-0.1, 0.24, -0.215], 0, EYE_C, EYE_C);
+      B([0, 1.32, 0], [0.1, 0.1, 0.02], [0.1, 0.24, -0.215], 0, EYE_C, EYE_C);
+    } else if (m.kind === 'zombie') {
       B([-0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], sw, ZPANTS, ZPANTS);
       B([0.1125, 0.675, 0], [0.22, 0.675, 0.22], [0, -0.3375, 0], -sw, ZPANTS, ZPANTS);
       B([0, 0.675, 0], [0.45, 0.675, 0.225], [0, 0.3375, 0], 0, ZSHIRT, ZSHIRT);
@@ -2592,14 +2662,93 @@ function pickSpawn(kind) {
     while (y > 1 && !solid(getBlock(x, y, z))) y--;
     const g = getBlock(x, y, z);
     if (y + 3 >= H || getBlock(x, y + 1, z) === WATER) continue;
-    if (kind === 'zombie' ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
-    if (kind === 'zombie') {   // 湧きつぶし: 松明の光が少しでも届く所にはゾンビは湧かない
+    if (MOBS[kind].hostile ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
+    if (MOBS[kind].hostile) {   // 湧きつぶし: 松明の光が少しでも届く所にはゾンビは湧かない
       const TL = torchLight(x >> 4, z >> 4);
       if (TL && TL(x & 15, y + 1, z & 15) > 0) continue;
     }
     send({ t: 'spawn', kind, x: x + 0.5, y: y + 1, z: z + 0.5 });
     return;
   }
+}
+
+// ---------- 弓矢 ----------
+// 矢は「撃った側のブラウザ」が飛ばして当たり判定をする（プレイヤーの矢は本人、骨の射手の矢はそのモブを動かしている人）。
+// 他の人の画面には、発射の合図だけ届けて見た目だけ同じように飛ばす。
+const arrows = [];   // { x,y,z, vx,vy,vz, dmg, mob(撃ったモブID・0ならプレイヤー), mine(自分が当たり判定をする), age, stuck(刺さって残る秒数) }
+function launchArrow(x, y, z, vx, vy, vz, dmg, mob) {
+  arrows.push({ x, y, z, vx, vy, vz, dmg, mob: mob || 0, mine: true, age: 0, stuck: 0 });
+  send({ t: 'shoot', x, y, z, vx, vy, vz });
+}
+let bowT = 0;   // 弓を引いている秒数
+function fireBow(c) {   // c: 引きの強さ 0〜1
+  const i = INV_ORDER.find(k => slots[k] && slots[k].b === ARROW);
+  if (i === undefined) { toast('矢が無い'); return; }
+  if (--slots[i].n <= 0) slots[i] = null;
+  const d = lookDir(), v = 14 + 22 * c;
+  launchArrow(P.x + d[0] * 0.4, eyeY() - 0.1 + d[1] * 0.4, P.z + d[2] * 0.4, d[0] * v, d[1] * v, d[2] * v, Math.round(2 + 6 * c), 0);
+  useTool();
+  refreshUI();
+}
+// 骨の射手が矢を撃つ: 山なりに飛ぶぶんを見込んで、相手の胸のあたりを狙う（少しばらつく）
+function mobShoot(m, tgt) {
+  const sx = m.x, sy = m.y + 1.4, sz = m.z;
+  const dx = tgt[1] - sx + (Math.random() - 0.5) * 1.2, dy = tgt[2] + 1.0 - sy, dz = tgt[3] - sz + (Math.random() - 0.5) * 1.2;
+  const t = Math.max(0.15, Math.hypot(dx, dz) / 22);
+  launchArrow(sx, sy, sz, dx / t, dy / t + 10 * t, dz / t, MOBS[m.kind].atk, m.id);
+}
+function updateArrows(dt) {
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    const a = arrows[i];
+    a.age += dt;
+    if (a.stuck) { if ((a.stuck -= dt) <= 0) arrows.splice(i, 1); continue; }
+    if (a.age > 8) { arrows.splice(i, 1); continue; }
+    const steps = Math.max(1, Math.ceil(Math.hypot(a.vx, a.vy, a.vz) * dt / 0.3)), h = dt / steps;
+    let gone = false;
+    for (let s = 0; s < steps && !gone; s++) {
+      a.vy -= 20 * h;
+      const nx = a.x + a.vx * h, ny = a.y + a.vy * h, nz = a.z + a.vz * h;
+      if (solid(getBlock(Math.floor(nx), Math.floor(ny), Math.floor(nz)))) {   // ブロックに刺さる
+        a.stuck = 3;
+        if (a.mine && !a.mob && Math.random() < 0.7) send({ t: 'drop', b: ARROW, n: 1, x: a.x, y: a.y, z: a.z, vx: 0, vy: 0, vz: 0 });   // 7割は拾い直せる
+        break;
+      }
+      if (a.mine) {   // 何かに当たったか（この1歩ぶんの線と、相手の体の箱）
+        const L = Math.hypot(nx - a.x, ny - a.y, nz - a.z) || 1e-6, o = [a.x, a.y, a.z], d = [(nx - a.x) / L, (ny - a.y) / L, (nz - a.z) / L];
+        const hl = Math.hypot(d[0], d[2]) || 1, kx = d[0] / hl * 4, kz = d[2] / hl * 4;
+        const hitBox = (x, y, z, w, hh) => { const t = rayBox(o, d, x - w, y, z - w, x + w, y + hh, z + w); return t !== null && t <= L; };
+        if (a.mob && hitBox(P.x, P.y, P.z, 0.35, 1.8)) { hurtMe(a.dmg, kx, kz, '骨の射手'); gone = true; }
+        if (!gone) for (const [id, p] of others) {
+          if (p.ty < -50 || !hitBox(p.x, p.y, p.z, 0.35, 1.8)) continue;
+          if (a.mob) send({ t: 'mattack', id: a.mob, target: id, ranged: 1 });
+          else { p.hurt = 0.3; send({ t: 'hit', id, dmg: a.dmg, kx, kz, ranged: 1 }); }
+          gone = true; break;
+        }
+        if (!gone && !a.mob) for (const [id, m] of mobs) {
+          const K = MOBS[m.kind];
+          if (!hitBox(m.x, m.y, m.z, K.w + 0.05, K.h)) continue;
+          send({ t: 'mhit', id, dmg: a.dmg, kx, kz });
+          gone = true; break;
+        }
+      }
+      a.x = nx; a.y = ny; a.z = nz;
+    }
+    if (gone) arrows.splice(i, 1);
+  }
+}
+const ARROW_C = [0.80, 0.74, 0.62], ARROW_T = [0.55, 0.55, 0.58];
+function drawArrows() {
+  let o = 0, boxes = 0;
+  for (const a of arrows) {
+    if (boxes + 2 > MAXCUBE) break;
+    const yaw = Math.atan2(-a.vx, -a.vz), pitch = Math.atan2(a.vy, Math.hypot(a.vx, a.vz));
+    o = pushBox(o, a.x, a.y, a.z, yaw, [0, 0, 0], [0.05, 0.05, 0.7], [0, 0, 0.3], pitch, ARROW_C, ARROW_C);      // 軸（先端が今の位置）
+    o = pushBox(o, a.x, a.y, a.z, yaw, [0, 0, 0], [0.09, 0.09, 0.1], [0, 0, 0], pitch, ARROW_T, ARROW_T);        // 矢じり
+    boxes += 2;
+  }
+  if (!boxes) return;
+  dynDraw(o);
+  gl.drawElements(gl.TRIANGLES, boxes * 36, gl.UNSIGNED_SHORT, 0);
 }
 
 // チャット
@@ -2684,7 +2833,7 @@ function render() {
   gl.disable(gl.BLEND); gl.depthMask(true); gl.uniform1f(uAlpha, 1); gl.uniform1f(uNoise, 1);
   for (const m of meshes.values()) if (m.op) { gl.bindVertexArray(m.op.vao); gl.drawElements(gl.TRIANGLES, m.op.n, gl.UNSIGNED_INT, 0); }
   gl.uniform1f(uNoise, 0);
-  drawItems(); drawPlayers(); drawMobs(); drawOutline(); drawCrack(); drawSprites();
+  drawItems(); drawPlayers(); drawMobs(); drawArrows(); drawOutline(); drawCrack(); drawSprites();
   gl.uniform1f(uNoise, 1);
   gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false); gl.uniform1f(uAlpha, 0.72);
   gl.disable(gl.CULL_FACE);
@@ -2703,7 +2852,7 @@ let last = 0, fps = 60, hudT = 0;
 function frame(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.1); last = t;
   tod = (tod + dt / DAYLEN) % 1;
-  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); netTick(dt); loadChunks(); render(); updateTags();
+  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); updateArrows(dt); netTick(dt); loadChunks(); render(); updateTags();
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
