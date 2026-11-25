@@ -2320,11 +2320,25 @@ function rayBox(o, d, x0, y0, z0, x1, y1, z1) {
   }
   return t0;
 }
+// 攻撃が届く距離: 視線の先で最初にある固いブロックまで。
+// 草・小麦・松明・ベッドなどのすり抜けるブロックは攻撃をさえぎらない（草むらの動物も殴れるように）
+function wallDist(maxD) {
+  const e = [P.x, eyeY(), P.z], d = lookDir(), c = e.map(Math.floor);
+  const s = d.map(v => v > 0 ? 1 : -1), td = d.map(v => v ? Math.abs(1 / v) : Infinity);
+  const tn = d.map((v, a) => v ? (v > 0 ? c[a] + 1 - e[a] : e[a] - c[a]) * td[a] : Infinity);
+  let t = 0;
+  while (t <= maxD) {
+    if (solid(getBlock(c[0], c[1], c[2]))) return t;
+    const a = tn[0] < tn[1] && tn[0] < tn[2] ? 0 : tn[1] < tn[2] ? 1 : 2;
+    c[a] += s[a]; t = tn[a]; tn[a] += td[a];
+  }
+  return maxD;
+}
 // 左クリックした瞬間に呼ぶ。プレイヤーかモブに当たったら true（その間はブロックを壊さない）
 function attack() {
   if (atkCd > 0) return false;
   const o = [P.x, eyeY(), P.z], d = lookDir();
-  let maxT = Math.min(3.5, target ? target.t : 99), hit = null, isMob = false;
+  let maxT = wallDist(3.5), hit = null, isMob = false;
   for (const [id, p] of others) {
     if (p.ty < -50) continue;
     const t = rayBox(o, d, p.x - 0.35, p.y, p.z - 0.35, p.x + 0.35, p.y + 1.8, p.z + 0.35);
@@ -2356,7 +2370,7 @@ function hurtMe(dmg, kx, kz, cause) {
     refreshUI();
   }
   dmg = armorReduce(dmg);
-  P.inv = 0.45; P.kbx = kx; P.kbz = kz;
+  P.inv = 0.3; P.kbx = kx; P.kbz = kz;   // 無敵時間は攻撃の間隔（0.35秒）より短く。長いと連打の半分が消える
   if (P.ground) P.vy = 5;
   damage(dmg, cause);
 }
