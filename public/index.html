@@ -98,8 +98,7 @@
 W 2回押し ダッシュ / Shift スニーク
 左クリック 攻撃・長押しで破壊 / 右クリック 設置・使う・食べる
 1-9・ホイール 選択 / E インベントリ / Q 捨てる
-F 飛行(Space上昇・Shift下降) / Enter チャット
-T 時間を進める / 作業台・かまどは右クリックで開く
+Enter チャット / 作業台・かまどは右クリックで開く
 [ ] 視野角を狭く/広く
 ダッシュでスタミナ消費 / 高所から落ちるとダメージ</div>
 <div id="names"></div>
@@ -110,7 +109,7 @@ T 時間を進める / 作業台・かまどは右クリックで開く
 <div id="hotbar"></div>
 <div id="jump" class="tbtn">JUMP</div>
 <div id="bag" class="tbtn">バッグ</div>
-<div id="tbar"><div id="tchat">チャット</div><div id="tdrop">捨てる</div><div id="tfly">飛行</div><div id="tsneak">しゃがむ</div></div>
+<div id="tbar"><div id="tchat">チャット</div><div id="tdrop">捨てる</div><div id="tsneak">しゃがむ</div></div>
 <div id="inv">
   <div id="panel">
     <div id="top">
@@ -132,7 +131,7 @@ T 時間を進める / 作業台・かまどは右クリックで開く
   <h1>BlockCraft</h1>
   <input id="name" maxlength="16" placeholder="名前">
   <button id="go">ワールドに入る</button>
-  <p>WASD 移動 ・ マウス 視点 ・ Space ジャンプ ・ W 2回押しでダッシュ ・ Shift スニーク<br>左クリック長押し 破壊 ・ 右クリック 設置 ・ E インベントリ ・ Q 捨てる<br>左クリックで人やモブを攻撃 ・ 食べ物を持って右クリックで食べる<br>Enter チャット ・ T 時間を進める ・ スマホ: 左でスティック移動、右で視点</p>
+  <p>WASD 移動 ・ マウス 視点 ・ Space ジャンプ ・ W 2回押しでダッシュ ・ Shift スニーク<br>左クリック長押し 破壊 ・ 右クリック 設置 ・ E インベントリ ・ Q 捨てる<br>左クリックで人やモブを攻撃 ・ 食べ物を持って右クリックで食べる<br>Enter チャット ・ スマホ: 左でスティック移動、右で視点</p>
 </div>
 <div id="lost"><div id="lostmsg">サーバーとの接続が切れた</div><button id="rejoin">入り直す</button></div>
 <div id="err">このブラウザは WebGL2 に対応していないため表示できません。</div>
@@ -214,6 +213,15 @@ const FOOD = { [BREAD]: 5, [COOKED_PORK]: 8, [COOKED_BEEF]: 8, [COOKED_CHICKEN]:
 const SMELT = { [IRON_ORE]: IRON_INGOT, [GOLD_ORE]: GOLD_INGOT, [COBBLE]: STONE, [LOG]: COAL,
   [RAW_PORK]: COOKED_PORK, [RAW_BEEF]: COOKED_BEEF, [RAW_CHICKEN]: COOKED_CHICKEN };
 const FUEL = { [COAL]: 8, [LOG]: 1.5, [PLANKS]: 1.5, [STICK]: 0.5 };
+// 松明と木炭。松明は 29=床に立てた物、30〜33=壁に付けた物（壁がある向きが TORCH_WALL の順）。すり抜けて、周りを照らす
+const TORCH = 29, CHARCOAL = 108, TORCH_R = 8;   // TORCH_R: 光が届く歩数（壁の向こうには回り込んだ分しか届かない）
+const isTorch = b => b >= TORCH && b <= TORCH + 4;
+const TORCH_WALL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+for (let b = TORCH; b <= TORCH + 4; b++) { HARD[b] = 0.05; NAME[b] = '松明'; COL[b] = COL[PLANKS]; }
+NAME[CHARCOAL] = '木炭';
+SMELT[LOG] = CHARCOAL;   // 原木を焼くと木炭
+FUEL[CHARCOAL] = 8;      // 燃料としては石炭と同じ
+const isSprite = b => b >= 100 || b === TORCH;   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
 // どのツールで速く壊せるか
 const TOOL_FOR = {};
 for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, FURNACE, ICE]) TOOL_FOR[b] = 'pick';
@@ -411,13 +419,14 @@ function getBlock(x, y, z) {
 function setBlock(x, y, z, b) {
   if (y < 0 || y >= H) return;
   const cx = x >> 4, cz = z >> 4, i = (y * CS + (z & 15)) * CS + (x & 15), k = ckey(cx, cz);
-  const cd = getChunk(cx, cz);
+  const cd = getChunk(cx, cz), prev = cd[i];
   cd[i] = b; calcTop(cd, x & 15, z & 15);
   let e = edits.get(k);
   if (!e) { e = new Map(); edits.set(k, e); }
   e.set(i, b);
-  const done = new Set();   // 影（AO）が隣チャンクにも及ぶので周囲も作り直す
-  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+  const done = new Set();   // 影（AO）が隣チャンクにも及ぶので周囲も作り直す。松明が増減した時は光が届く範囲まで
+  const r = isTorch(b) || isTorch(prev) ? TORCH_R + 1 : 1;
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     const k2 = ckey((x + dx) >> 4, (z + dz) >> 4);
     if (done.has(k2)) continue;
     done.add(k2);
@@ -425,7 +434,7 @@ function setBlock(x, y, z, b) {
     if (m) { freeMesh(m); meshes.set(k2, buildMesh(m.cx, m.cz)); }
   }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= WHEAT3);   // 植物は空気と同じ扱い（すり抜ける・光を通す）
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4);   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -446,8 +455,8 @@ const TAN = [[1, 2], [1, 2], [0, 2], [0, 2], [0, 1], [0, 1]];
 const FCI = [1, 1, 0, 2, 1, 1];   // 面 → 色インデックス
 // 草と小麦は、細い三角の葉を何枚か立てて作る（両面から見えるよう裏表2枚ずつ）
 const WHEAT_COL = [[0.40, 0.70, 0.25], [0.42, 0.70, 0.24], [0.58, 0.72, 0.24], [0.88, 0.72, 0.26]];
-function plantMesh(V, I, b, wx, y, wz, bi, lt) {
-  const wheat = b >= WHEAT0, st = b - WHEAT0;
+function plantMesh(V, I, b, wx, y, wz, bi, lt, tl = 0) {
+  const wheat = b >= WHEAT0, st = b - WHEAT0, tn = 0.4 * tl;   // tn: 松明の光（法線の長さに入れてシェーダーへ渡す）
   const n = wheat ? 9 : 6, hgt = wheat ? [0.22, 0.42, 0.62, 0.9][st] : 0.75, col = wheat ? WHEAT_COL[st] : GTINT[bi][0];
   for (let i = 0; i < n; i++) {
     const r1 = hash3(wx, y, wz, 700 + i), r2 = hash3(wx, y, wz, 720 + i), r3 = hash3(wx, y, wz, 740 + i);
@@ -455,23 +464,85 @@ function plantMesh(V, I, b, wx, y, wz, bi, lt) {
     const bz = wheat ? 0.2 + Math.floor(i / 3) * 0.3 + (r2 - 0.5) * 0.1 : 0.15 + r2 * 0.7;
     const ang = r3 * Math.PI, dx = Math.cos(ang) * 0.07, dz = Math.sin(ang) * 0.07;
     const h = hgt * (0.65 + r3 * 0.35), l = lt * (0.78 + r1 * 0.28), lean = (r2 - 0.5) * 0.25, base = V.length / 9;
-    V.push(wx + bx - dx, y, wz + bz - dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, 0, 0);
-    V.push(wx + bx + dx, y, wz + bz + dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, 0, 0);
-    V.push(wx + bx + lean, y + h, wz + bz + lean, col[0] * l, col[1] * l, col[2] * l, 0, 0, 0);
+    V.push(wx + bx - dx, y, wz + bz - dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, tn, 0);
+    V.push(wx + bx + dx, y, wz + bz + dz, col[0] * l * 0.7, col[1] * l * 0.7, col[2] * l * 0.7, 0, tn, 0);
+    V.push(wx + bx + lean, y + h, wz + bz + lean, col[0] * l, col[1] * l, col[2] * l, 0, tn, 0);
     I.push(base, base + 1, base + 2, base, base + 2, base + 1);
   }
+}
+// ---------- 松明の光 ----------
+// チャンクとその周り TORCH_R マスについて、各マスに松明の光が何段階届くかを求める。
+// 松明から空気（すり抜けるマス）を伝って1歩ごとに1段階弱くなる（壁の向こうへは回り込んだ分しか届かない）。
+// 松明は自然には生えないので、プレイヤーの変更（edits）の中から探せば全部見つかる。
+function torchLight(cx, cz) {
+  const R = TORCH_R, W = CS + R * 2, x0 = cx * CS - R, z0 = cz * CS - R;
+  let L = null;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const e = edits.get(ckey(cx + dx, cz + dz));
+    if (e) for (const [i, b] of e) {
+      if (!isTorch(b)) continue;
+      const tx = (cx + dx) * CS + (i & 15) - x0, ty = i >> 8, tz = (cz + dz) * CS + ((i >> 4) & 15) - z0;
+      if (tx < 0 || tx >= W || tz < 0 || tz >= W) continue;
+      if (!L) L = new Uint8Array(W * W * H);
+      const s = (ty * W + tz) * W + tx;
+      if (L[s] >= R) continue;
+      L[s] = R;
+      const q = [tx, ty, tz, R];
+      for (let h = 0; h < q.length; h += 4) {
+        const lv = q[h + 3] - 1;
+        if (lv <= 0) continue;
+        for (const D of DIRS) {
+          const nx = q[h] + D[0], ny = q[h + 1] + D[1], nz = q[h + 2] + D[2];
+          if (nx < 0 || nx >= W || nz < 0 || nz >= W || ny < 0 || ny >= H) continue;
+          const j = (ny * W + nz) * W + nx;
+          if (L[j] >= lv || opaque(getBlock(x0 + nx, ny, z0 + nz))) continue;
+          L[j] = lv; q.push(nx, ny, nz, lv);
+        }
+      }
+    }
+  }
+  if (!L) return null;
+  // チャンク内の座標(-R〜CS+R-1)で引けるようにして返す。値は 0〜1 の明るさ
+  return (lx, y, lz) => y < 0 || y >= H ? 0 : Math.pow(L[(y * W + lz + R) * W + lx + R] / R, 1.2);
+}
+// 松明の見た目: 細い棒の先に炎。壁の松明は壁際から斜めに生える。自分自身は光の強さ1（夜でも明るい）
+function torchMesh(V, I, b, wx, y, wz) {
+  const k = b - TORCH;
+  let bx = wx + 0.5, by = y, bz = wz + 0.5, a = [0, 1, 0], e1 = [0, 0, 1];
+  if (k > 0) {
+    const [dx, dz] = TORCH_WALL[k - 1], t = 0.38;
+    bx += dx * 0.42; bz += dz * 0.42; by += 0.18;
+    a = [-dx * Math.sin(t), Math.cos(t), -dz * Math.sin(t)];
+    if (dz) e1 = [1, 0, 0];
+  }
+  const e2 = [a[1] * e1[2] - a[2] * e1[1], a[2] * e1[0] - a[0] * e1[2], a[0] * e1[1] - a[1] * e1[0]];
+  const box = (w0, w1, hw, side, top) => {
+    const pt = (u, v, w) => [0, 1, 2].map(i => [bx, by, bz][i] + a[i] * w + (e1[i] * u + e2[i] * v) * hw);
+    const F = [[[-1, -1, w1], [1, -1, w1], [1, 1, w1], [-1, 1, w1]], [[-1, -1, w0], [1, -1, w0], [1, 1, w0], [-1, 1, w0]],
+      [[-1, -1, w0], [-1, 1, w0], [-1, 1, w1], [-1, -1, w1]], [[1, -1, w0], [1, 1, w0], [1, 1, w1], [1, -1, w1]],
+      [[-1, -1, w0], [1, -1, w0], [1, -1, w1], [-1, -1, w1]], [[-1, 1, w0], [1, 1, w0], [1, 1, w1], [-1, 1, w1]]];
+    F.forEach((f, fi) => {
+      const c = fi === 0 ? top : side.map(v => v * (fi % 2 ? 0.8 : 0.92)), base = V.length / 9;
+      for (const [u, v, w] of f) V.push(...pt(u, v, w), c[0], c[1], c[2], 0, 0.4, 0);
+      I.push(base, base + 1, base + 2, base, base + 2, base + 3, base, base + 2, base + 1, base, base + 3, base + 2);   // 両面
+    });
+  };
+  box(0, 0.6, 0.0625, [0.46, 0.32, 0.17], [0.46, 0.32, 0.17]);
+  box(0.5, 0.72, 0.085, [1.0, 0.72, 0.25], [1.0, 0.95, 0.65]);
 }
 function buildMesh(cx, cz) {
   const d = getChunk(cx, cz);
   const ov = [], oi = [], wv = [], wi = [];
   const ao = [0, 0, 0, 0], p = [0, 0, 0], q = [0, 0, 0];
   const ox = cx * CS, oz = cz * CS;
+  const TL = torchLight(cx, cz);   // 近くに松明が無ければ null
   for (let y = 0; y < H; y++) for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
+    if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
     if (isPlant(b)) {
-      const tp = d.top[z * CS + x];
-      plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
+      const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0;
+      plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1), tl);
       continue;
     }
     const isW = b === WATER, bi = d.bio[z * CS + x];
@@ -487,7 +558,10 @@ function buildMesh(cx, cz) {
         const tp = (nx >= 0 && nx < CS && nz >= 0 && nz < CS) ? d.top[nz * CS + nx] : topAt(ox + nx, oz + nz);
         if (ny <= tp) lt = Math.max(0.3, 0.9 - (tp - ny) * 0.06);
       }
-      const nk = ORE_K[b] || 1;
+      // 松明の光: 面の前のマスの明るさ。昼の洞窟でも明るくなるよう色に焼き込み、夜用に法線の長さ（小数部分）でも渡す
+      const tl = !isW && TL ? TL(nx, ny, nz) : 0;
+      if (tl > lt) lt = tl;
+      const nk = (ORE_K[b] || 1) + 0.4 * tl;
       const V = isW ? wv : ov, I = isW ? wi : oi, base = V.length / 9;
       const t1 = TAN[f][0], t2 = TAN[f][1];
       for (let k = 0; k < 4; k++) {
@@ -541,7 +615,8 @@ void main(){
     float m = fract(sin(dot(q, vec3(41.3,17.7,93.1)))*9173.3);
     if (m > 0.72) c = (k < 2.5 ? vec3(0.09,0.09,0.10) : k < 3.5 ? vec3(0.88,0.64,0.46) : k < 4.5 ? vec3(0.99,0.84,0.20) : vec3(0.36,0.94,0.90)) * dot(vCol, vec3(0.66));
   }
-  c *= uLight;
+  float tl = clamp((k - floor(k + 0.05)) / 0.4, 0.0, 1.0);   // 松明の光（法線の長さの小数部分。鉱石の目印は整数部分）
+  c *= max(uLight, tl * vec3(1.0, 0.82, 0.55));               // 夜でも松明の近くは暖色で明るい
   float f = clamp((vDist-uFog.x)/(uFog.y-uFog.x), 0.0, 1.0);
   o = vec4(mix(c, uSky, f*f), mix(uAlpha, 1.0, f*f));
 }`;
@@ -652,6 +727,15 @@ const SPR = {}, SPR_IDS = [];
   mk(COAL, set => {
     each((x, y) => { if ((x - 7.5) ** 2 + (y - 8) ** 2 < 20) set(x, y, [36, 36, 40]); });
     for (const [x, y] of [[6, 6], [9, 7], [7, 10], [10, 10], [5, 9], [8, 5]]) set(x, y, [78, 78, 86]);
+  });
+  mk(CHARCOAL, set => {   // 木炭: 石炭より茶色がかった、角ばったかたまり
+    each((x, y) => { if (Math.abs(x - 7.5) + Math.abs(y - 8) * 1.3 < 7 && (x - 7.5) ** 2 + (y - 8) ** 2 < 26) set(x, y, x + y < 15 ? [64, 50, 40] : [44, 34, 28]); });
+    for (const [x, y] of [[5, 7], [6, 6], [9, 6], [10, 9], [7, 10]]) set(x, y, [104, 82, 64]);
+  });
+  mk(TORCH, set => {      // 松明: 棒の先に炎
+    for (let y = 6; y <= 15; y++) { set(7, y, [140, 98, 52]); set(8, y, [96, 66, 34]); }
+    for (const [x, y, c] of [[7, 2, 0], [6, 3, 1], [7, 3, 0], [8, 3, 0], [9, 3, 1], [6, 4, 1], [7, 4, 2], [8, 4, 2], [9, 4, 1], [7, 5, 1], [8, 5, 1], [8, 2, 1]])
+      set(x, y, [[255, 236, 130], [255, 160, 40], [255, 252, 220]][c]);
   });
   const ingot = (c, dk, hi) => set => {   // 斜めから見た延べ棒
     for (let y = 5; y <= 10; y++) for (let x = 2; x <= 12; x++) set(x + (y < 8 ? 1 : 0), y, y === 5 ? hi : y >= 9 ? dk : c);
@@ -767,7 +851,7 @@ function mvp(ex, ey, ez, yaw, pitch, aspect) {
 
 // ---------- プレイヤー ----------
 const PW = 0.3, PH = 1.8, EYE = 1.62, EPS = 1e-4;
-const P = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, ground: false, blocked: false, fly: false,
+const P = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, ground: false, blocked: false,
   hp: 20, st: 20, tired: false, rest: 0, regen: 0, land: 0,
   sprint: false, sneak: false, edge: false, crouch: 0, kbx: 0, kbz: 0, inv: 0 };
 const eyeY = () => P.y + EYE - P.crouch * 0.14;
@@ -824,11 +908,11 @@ function update(dt) {
   let iz = on ? (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + joy.y : 0;
   const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
   const shift = on && (keys.ShiftLeft || keys.ShiftRight || joy.sneak), jump = on && (keys.Space || joy.jump);
-  P.sneak = shift && !P.fly && !inWater;
+  P.sneak = shift && !inWater;
   // ダッシュ: W 2回押しで開始、W を離す・スニーク・スタミナ切れで終了
   if (!keys.KeyW || P.sneak || P.tired || P.st <= 0) P.sprint = false;
-  const sprint = P.sprint && !P.fly && len > 0.1;
-  const sp = (P.fly ? (P.sprint ? 22 : 13) : P.sneak ? 2.2 : sprint ? 8.5 : 5.5) * (inWater && !P.fly ? 0.55 : 1);
+  const sprint = P.sprint && len > 0.1;
+  const sp = (P.sneak ? 2.2 : sprint ? 8.5 : 5.5) * (inWater ? 0.55 : 1);
   P.edge = P.sneak && P.ground;
   P.crouch += ((P.sneak ? 1 : 0) - P.crouch) * Math.min(1, dt * 14);
   const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
@@ -836,8 +920,7 @@ function update(dt) {
   const kdec = Math.exp(-6 * dt); P.kbx *= kdec; P.kbz *= kdec; P.inv -= dt;
   P.vx = (-sy * iz + cy * ix) * sp + P.kbx;
   P.vz = (-cy * iz - sy * ix) * sp + P.kbz;
-  if (P.fly) P.vy = ((jump ? 1 : 0) - (shift ? 1 : 0)) * 10;
-  else if (inWater) P.vy = jump ? (P.blocked ? 9 : 3.2) : Math.max(P.vy - 8 * dt, -3);
+  if (inWater) P.vy = jump ? (P.blocked ? 9 : 3.2) : Math.max(P.vy - 8 * dt, -3);
   else { P.vy = Math.max(P.vy - 26 * dt, -50); if (jump && P.ground) { P.vy = 8.4; if (sprint) drain(0.3); } }
   if (sprint) drain(2.5 * dt);
   P.ground = false; P.blocked = false;
@@ -864,7 +947,7 @@ function damage(v, cause) {
 }
 function updateStats(dt) {
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
-  if (P.land > 0) { if (!P.fly && !inWater) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
+  if (P.land > 0) { if (!inWater) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
   // スタミナ: ダッシュをやめて1秒たつと回復。使い切ると4まで戻るまでダッシュ不可
   P.rest += dt;
   if (P.rest > 1 && P.st < 20) P.st = Math.min(20, P.st + 3 * dt);
@@ -897,7 +980,7 @@ function raycast(maxD) {
   let px = x, py = y, pz = z, t = 0;
   while (t <= maxD) {
     const b = getBlock(x, y, z);
-    if (opaque(b) || isPlant(b)) return { x, y, z, px, py, pz, b, t };
+    if (opaque(b) || isPlant(b) || isTorch(b)) return { x, y, z, px, py, pz, b, t };
     px = x; py = y; pz = z;
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; }
@@ -913,6 +996,7 @@ function breakTime(b, tool) { return HARD[b] / (tool && TOOL_FOR[b] === tool.typ
 function dropsOf(b, tool) {
   const need = NEED_PICK[b];
   if (need && !(tool && tool.type === 'pick' && tool.lvl >= need)) return [];
+  if (isTorch(b)) return [TORCH];   // 壁の松明も落とすのは普通の松明
   if (b === TALLGRASS) return Math.random() < 0.15 ? [SEEDS] : [];          // 草: 15% で種
   if (b === WHEAT3) return Math.random() < 0.5 ? [WHEAT, SEEDS, SEEDS] : [WHEAT, SEEDS];
   if (b >= WHEAT0 && b < WHEAT3) return [SEEDS];
@@ -926,6 +1010,37 @@ function breakBlock(x, y, z, b, tool) {
   netSet(x, y, z, AIR, b, dropsOf(b, tool));
   const up = getBlock(x, y + 1, z);
   if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));   // 上に生えていた植物も一緒に壊れる
+  dropTorches(x, y, z);
+}
+// (x,y,z) のブロックが無くなった時、そこに立てていた・付けていた松明を落とす
+function dropTorches(x, y, z) {
+  const up = getBlock(x, y + 1, z);
+  if (up === TORCH) netSet(x, y + 1, z, AIR, up, [TORCH]);
+  TORCH_WALL.forEach(([wx, wz], k) => {   // 壁が +x 側にある松明は、その壁の1マス -x 側にある
+    const tx = x - wx, tz = z - wz, b = getBlock(tx, y, tz);
+    if (b === TORCH + 1 + k) netSet(tx, y, tz, AIR, b, [TORCH]);
+  });
+}
+// 松明を置く: ブロックの上面なら床に立て、側面なら壁に付ける（天井には付けられない）
+function placeTorch(st) {
+  if (!target) return;
+  let x, y, z, b;
+  if (isPlant(target.b)) {   // 草を狙っている時は、その場所に立てる
+    x = target.x; y = target.y; z = target.z; b = TORCH;
+    if (!opaque(getBlock(x, y - 1, z))) return;
+  } else {
+    if (!opaque(target.b)) return;   // 松明に松明は付けない
+    x = target.px; y = target.py; z = target.pz;
+    const dx = target.x - x, dy = target.y - y, dz = target.z - z;
+    if (dy === -1) b = TORCH;
+    else if (dy === 1) return;
+    else { const k = TORCH_WALL.findIndex(([wx, wz]) => wx === dx && wz === dz); if (k < 0) return; b = TORCH + 1 + k; }
+  }
+  const cur = getBlock(x, y, z);
+  if (y < 1 || y >= H || !(cur === AIR || isPlant(cur))) return;
+  netSet(x, y, z, b, cur);
+  if (--st.n <= 0) slots[sel] = null;
+  refreshUI();
 }
 function useTool() {   // 手に持っているツールの耐久を1減らす
   const s = slots[sel];
@@ -933,6 +1048,7 @@ function useTool() {   // 手に持っているツールの耐久を1減らす
 }
 function tryPlace() {
   const st = slots[sel];
+  if (st && st.b === TORCH) return placeTorch(st);
   if (!target || !st || st.b >= 100) return;
   // 草などを狙っている時は、その場所に置き換える
   const x = isPlant(target.b) ? target.x : target.px, y = isPlant(target.b) ? target.y : target.py, z = isPlant(target.b) ? target.z : target.pz;
@@ -989,7 +1105,7 @@ function updateInteract(dt) {
     const tool = heldTool(), need = breakTime(target.b, tool);
     if (breakT >= need) {
       breakBlock(target.x, target.y, target.z, target.b, tool);   // ドロップはサーバーが出す
-      if (tool && !isPlant(target.b)) useTool();
+      if (tool && !isPlant(target.b) && !isTorch(target.b)) useTool();
       breakT = 0; breakKey = '';
     } else if (need < Infinity) prog = breakT / need;
   } else { breakT = 0; breakKey = ''; }
@@ -1054,7 +1170,7 @@ function dynDraw(o) {
 function drawItems() {
   let o = 0, cubes = 0;
   for (const e of items) {
-    if (e.b >= 100) continue;
+    if (isSprite(e.b)) continue;
     const copies = e.n > 1 ? 2 : 1;
     const ang = e.age * 1.6, ca = Math.cos(ang), sa = Math.sin(ang), S = 0.26;
     const cyv = e.y + 0.3 + Math.sin(e.age * 2.4) * 0.07;
@@ -1079,7 +1195,7 @@ function drawItems() {
 function drawSprites() {
   let o = 0, quads = 0;
   for (const e of items) {
-    if (e.b < 100 || quads >= MAXCUBE * 6) continue;
+    if (!isSprite(e.b) || quads >= MAXCUBE * 6) continue;
     const idx = SPR_IDS.indexOf(e.b), ang = e.age * 1.6, ca = Math.cos(ang) * 0.2, sa = Math.sin(ang) * 0.2;
     const cy = e.y + 0.32 + Math.sin(e.age * 2.4) * 0.07;
     for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
@@ -1160,6 +1276,8 @@ const RECIPES = [
   { p: ['SS', 'SS'], k: { S: SAND }, out: [SANDSTONE, 1] },
 ];
 RECIPES.push({ p: ['CCC', 'C C', 'CCC'], k: { C: COBBLE }, out: [FURNACE, 1] }, { p: ['WWW'], k: { W: WHEAT }, out: [BREAD, 1] });
+// 松明: 石炭か木炭を棒の上に置くと4本
+RECIPES.push({ p: ['C', 'S'], k: { C: COAL, S: STICK }, out: [TORCH, 4] }, { p: ['C', 'S'], k: { C: CHARCOAL, S: STICK }, out: [TORCH, 4] });
 // ツール: ツルハシ・斧・シャベル・剣・クワ × 5素材
 const TOOL_PAT = [['MMM', ' S ', ' S '], ['MM', 'MS', ' S'], ['M', 'S', 'S'], ['M', 'M', 'S'], ['MM', ' S', ' S']];
 TIERS.forEach((T, ti) => TOOL_PAT.forEach((p, yi) => RECIPES.push({ p, k: { M: T.mat, S: STICK }, out: [toolId(ti, yi), 1], hide: ti > 0 })));
@@ -1213,7 +1331,7 @@ function icon(b) {
   if (icons[b]) return icons[b];
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const g = c.getContext('2d');
-  if (b >= 100) {
+  if (isSprite(b)) {
     const a = SPR[b];
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
       const o = (y * 16 + x) * 4;
@@ -1461,8 +1579,6 @@ addEventListener('keydown', e => {
     if (now - lastW < 300) P.sprint = true;
     lastW = now;
   }
-  if (e.code === 'KeyF') { P.fly = !P.fly; P.vy = 0; }
-  if (e.code === 'KeyT') send({ t: 'skip' });
   if (e.code === 'BracketLeft') fov = Math.max(40, fov - 2);
   if (e.code === 'BracketRight') fov = Math.min(100, fov + 2);
   if (e.code === 'KeyQ') dropOne();
@@ -1516,12 +1632,11 @@ canvas.addEventListener('touchend', touchEnd); canvas.addEventListener('touchcan
 $('jump').addEventListener('touchstart', e => { e.preventDefault(); joy.jump = true; }, { passive: false });
 $('jump').addEventListener('touchend', () => { joy.jump = false; });
 $('jump').addEventListener('touchcancel', () => { joy.jump = false; });
-// スマホ用の小さいボタン（右上）: チャット・捨てる・飛行・しゃがむ（飛行中は下降）
+// スマホ用の小さいボタン（右上）: チャット・捨てる・しゃがむ
 canvas.addEventListener('touchstart', () => { $('tbar').style.display = 'flex'; }, { once: true, passive: true });
 const tbtn = (id, fn) => $(id).addEventListener('touchend', e => { e.preventDefault(); if (started) fn(); }, { passive: false });
 tbtn('tchat', () => { if (chatOpen) closeChat(); else if (!invOpen) openChat(); });
 tbtn('tdrop', () => { if (active()) dropOne(); });
-tbtn('tfly', () => { P.fly = !P.fly; P.vy = 0; $('tfly').classList.toggle('on', P.fly); });
 tbtn('tsneak', () => { joy.sneak = !joy.sneak; $('tsneak').classList.toggle('on', joy.sneak); });
 // スマホのキーボードは Enter が keydown で届かないことがあるので、フォームの送信でも送れるようにする
 {
@@ -1634,7 +1749,7 @@ function connect(name) {
 }
 // ---------- 切断と再接続 ----------
 // サーバーの再起動（Railway の再デプロイ）や回線断で切れたら、サーバーが戻るのを待ってページを読み直し、
-// 同じ名前で自動で入り直す。持ち物・位置・飛行中かは saveLocal で保存しているので続きから遊べる。
+// 同じ名前で自動で入り直す。持ち物・位置・体力は saveLocal で保存しているので続きから遊べる。
 let myName = '', kicked = false, lostAt = 0, lastMsg = 0, autoJoined = false;
 const RETRY_MAX = 5;   // 入れないまま読み直しがこの回数続いたら、自動はやめてボタン待ちにする
 function clientId() {   // このブラウザの目印（同じブラウザの二重ログインを見分ける用。サーバーにだけ送る）
@@ -1677,12 +1792,12 @@ function connectionLost(code) {
 $('rejoin').addEventListener('click', () => { try { sessionStorage.removeItem('blockcraft-retry'); } catch (e) {} rejoin(); });
 // サーバーからは5秒ごとに時刻が届く。25秒なにも届かなければ、切れているとみなす（スリープ復帰など）
 setInterval(() => { if (online && Date.now() - lastMsg > 25000) connectionLost(); }, 5000);
-// 持ち物・位置・体力・飛行中かはブラウザに保存（ワールド×名前ごと）。同じブラウザで同じ名前で入り直すと続きから
+// 持ち物・位置・体力はブラウザに保存（ワールド×名前ごと）。同じブラウザで同じ名前で入り直すと続きから
 const saveKey = () => 'blockcraft-save-' + seed + '-' + myName;
 function saveLocal() {
   if (!myId || kicked) return;   // 別タブに切り替わった後は、古いタブから上書きしない
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, fly: P.fly }));
+    localStorage.setItem(saveKey(), JSON.stringify({ slots, held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp }));
   } catch (e) {}
 }
 function loadLocal() {
@@ -1707,12 +1822,12 @@ function loadLocal() {
     P.x = s.x; P.y = s.y; P.z = s.z; P.yaw = s.yaw || 0; P.pitch = s.pitch || 0;
   }
   if (s.hp > 0 && s.hp <= 20) P.hp = s.hp;
-  // 飛んでいる最中に切れた人は、飛んだまま再開する（でないと入り直した瞬間に墜落する）。
-  // 飛行を保存していなかった頃のデータは、足元が5マス以上空いていたら飛行中だったとみなす
-  let air = 0;
-  while (air < 5 && P.y - 1 - air > 0 && !opaque(getBlock(Math.floor(P.x), Math.floor(P.y) - 1 - air, Math.floor(P.z)))) air++;
-  if (s.fly === true || (s.fly === undefined && air >= 5)) P.fly = true;
-  $('tfly').classList.toggle('on', P.fly);
+  // 空中で保存されていたら（飛行があった頃のデータ・落下中に切れた時）、真下の地面に降ろす。
+  // そのまま再開すると入り直した瞬間に墜落して落下ダメージを受けるため
+  let gy = Math.floor(P.y) - 1;
+  const stand = b => opaque(b) || b === WATER;   // 海の上なら海底ではなく水面に降ろす
+  while (gy > 0 && !stand(getBlock(Math.floor(P.x), gy, Math.floor(P.z)))) gy--;
+  if (P.y - (gy + 1) >= 3) { P.y = gy + 1; P.vy = 0; }
 }
 addEventListener('pagehide', saveLocal);
 // 自分の位置を 1秒に10回送る（変化があった時だけ）
@@ -1902,7 +2017,7 @@ function attack() {
 }
 // 自分がダメージを受けた（他プレイヤーかゾンビから）
 function hurtMe(dmg, kx, kz, cause) {
-  if (P.inv > 0 || P.fly) return;
+  if (P.inv > 0) return;
   P.inv = 0.45; P.kbx = kx; P.kbz = kz;
   if (P.ground) P.vy = 5;
   damage(dmg, cause);
@@ -2068,7 +2183,7 @@ function frame(t) {
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
-    hud.textContent = `XYZ  ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)}\nバイオーム ${placeName()}\nFPS  ${fps.toFixed(0)}   チャンク ${meshes.size}\n時刻 ${clock()}   オンライン ${others.size + 1}人\nSEED ${seed}   視野角 ${fov}${P.fly ? '\n飛行モード' : ''}`;
+    hud.textContent = `XYZ  ${P.x.toFixed(1)} / ${P.y.toFixed(1)} / ${P.z.toFixed(1)}\nバイオーム ${placeName()}\nFPS  ${fps.toFixed(0)}   チャンク ${meshes.size}\n時刻 ${clock()}   オンライン ${others.size + 1}人\nSEED ${seed}   視野角 ${fov}`;
   }
   requestAnimationFrame(frame);
 }

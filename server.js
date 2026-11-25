@@ -17,9 +17,10 @@ const ITEM_TTL = 300;      // 落ちているアイテムが消えるまでの�
 const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
-const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 120, 121, 122, 123, 124, 125, 126]);
+const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
+const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
-const validBlock = b => Number.isInteger(b) && b >= 0 && b <= 28 && b !== WATER && b !== BEDROCK;
+const validBlock = b => Number.isInteger(b) && b >= 0 && b <= 33 && b !== WATER && b !== BEDROCK;
 const validItem = b => (validBlock(b) && b !== 0 && b < 24) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -46,7 +47,9 @@ function save() {
   } catch (e) { console.error('保存失敗:', e.message); }
 }
 setInterval(save, 20000);
-for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { save(); process.exit(0); });
+// 再デプロイ時は SIGTERM が届く。最後に保存してから終わる
+// （npm start 経由だと node まで届かないことがあるので、railway.json で node server.js を直接起動している）
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { save(); console.log(`終了(${sig}): ワールドを保存した`); process.exit(0); });
 
 // ---------- 画面の配信 ----------
 const INDEX = path.join(__dirname, 'public', 'index.html');
@@ -194,11 +197,6 @@ const handlers = {
       mob.x = e[1]; mob.y = e[2]; mob.z = e[3]; mob.yaw = e[4]; mob.moved = true;
     }
   },
-  skip(p) {   // T キー: 時間を3時間進める
-    tod = (tod + 0.125) % 1; dirty = true;
-    broadcast({ t: 'tod', v: tod });
-    broadcast({ t: 'chat', name: '', text: `${p.name} が時間を進めた` });
-  },
 };
 
 // ---------- 接続の管理（連打制限・二重ログイン・接続確認） ----------
@@ -207,7 +205,7 @@ const handlers = {
 // チャットは制限しない。ここに無い種類は DEFAULT_RATE。新しい種類を足して回数が多いならここにも足すこと。
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
-  hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3], skip: [0.5, 3],
+  hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
