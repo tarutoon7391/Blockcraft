@@ -2427,6 +2427,10 @@ function pickSpawn(kind) {
     const g = getBlock(x, y, z);
     if (y + 3 >= H || getBlock(x, y + 1, z) === WATER) continue;
     if (kind === 'zombie' ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
+    if (kind === 'zombie') {   // 湧きつぶし: 松明の光が少しでも届く所にはゾンビは湧かない
+      const TL = torchLight(x >> 4, z >> 4);
+      if (TL && TL(x & 15, y + 1, z & 15) > 0) continue;
+    }
     send({ t: 'spawn', kind, x: x + 0.5, y: y + 1, z: z + 0.5 });
     return;
   }

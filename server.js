@@ -52,7 +52,9 @@ function save() {
     dirty = false;
   } catch (e) { console.error('保存失敗:', e.message); }
 }
-setInterval(save, 20000);
+// 変更があれば3秒ごとに保存する。再デプロイ時は新しいサーバーが先にファイルを読み込み、
+// その後で古いサーバーが最後の保存をするため、最後の保存は新しい方に届かない。間隔を短くして消える分を最大3秒にする
+setInterval(save, 3000);
 // 再デプロイ時は SIGTERM が届く。最後に保存してから終わる
 // （npm start 経由だと node まで届かないことがあるので、railway.json で node server.js を直接起動している）
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { save(); console.log(`終了(${sig}): ワールドを保存した`); process.exit(0); });
