@@ -156,7 +156,11 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   DEEPSTONE = 61, DEEP_BRICK = 62, GLOWMOSS = 63, MYCEL = 64, GLOWSHROOM = 65, MUSH_STEM = 66, MUSH_CAP = 67,
   GLOW_ORE = 68, DARKIRON_ORE = 69, EMBER_ORE = 70, VOID_ORE = 71, LAMP = 72,
   RUIN_BRICK = 73, RUIN_CRACKED = 74, RUIN_PILLAR = 75, RUIN_RUNE = 76,   // 地底の遺跡
-  VOID_PORTAL = 77;   // 虚空への門（おかかっぱを倒すと遺跡に開く）   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
+  VOID_PORTAL = 77,   // 虚空への門（おかかっぱを倒すと遺跡に開く）
+  // 飾りブロック（第8弾）
+  SMOOTH_STONE = 78, CRACKED_BRICK = 79, MOSSY_BRICK = 80, MOSSY_COBBLE = 81, CHISELED_BRICK = 82, SMOOTH_SANDSTONE = 83, CHISELED_SANDSTONE = 84,
+  PLASTER = 85, ROOF_TILE = 86, TATAMI = 87, SHOJI = 88, HAY = 89, PARQUET = 90, SNOW_BRICK = 91, GLOW_GLASS = 92, DEEP_TILE = 93, POLISHED_DEEP = 94,
+  GOLD_BRICK = 95, CHECKER = 96, IRON_PLATE = 97, LANTERN = 98;   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
@@ -246,7 +250,7 @@ for (let b = TORCH; b <= TORCH + 4; b++) { HARD[b] = 0.05; NAME[b] = '松明'; C
 NAME[CHARCOAL] = '木炭';
 SMELT[LOG] = CHARCOAL;   // 原木を焼くと木炭
 FUEL[CHARCOAL] = 8;      // 燃料としては石炭と同じ
-const isSprite = b => b >= 100 || b === TORCH || b === SAPLING || b === 65;   // 65=光るキノコ   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
+const isSprite = b => (b >= 100 && b < 1000) || b === TORCH || b === SAPLING || b === 65 || SPRITE_B.has(b);   // 65=光るキノコ   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
 // どのツールで速く壊せるか
 const TOOL_FOR = {};
 for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, FURNACE, ICE]) TOOL_FOR[b] = 'pick';
@@ -345,6 +349,109 @@ TOOLS[VOID_BLADE] = { type: 'sword', tier: 7, speed: 1, dur: 1600, lvl: 0, dmg: 
 TOOLS[VOID_STAFF] = { type: 'staff', tier: 7, speed: 1, dur: 600, lvl: 0, dmg: 1 };        // 右クリックで光の弾
 ARMOR[VOID_CLOAK] = { part: 1, tier: 7, def: 9, dur: 16 * 30 };                            // 胴。2割で攻撃を無効にする
 const isBow = b => b === BOW || b === EMBER_BOW;
+// ---- 建材（第8弾） ----
+// 飾りブロック（普通の立方体）
+Object.assign(NAME, { [SMOOTH_STONE]: '滑らかな石', [CRACKED_BRICK]: 'ひび割れた石レンガ', [MOSSY_BRICK]: '苔むした石レンガ', [MOSSY_COBBLE]: '苔むした丸石',
+  [CHISELED_BRICK]: '模様入りの石レンガ', [SMOOTH_SANDSTONE]: '滑らかな砂岩', [CHISELED_SANDSTONE]: '模様入りの砂岩', [PLASTER]: '漆喰', [ROOF_TILE]: '瓦',
+  [TATAMI]: '畳', [SHOJI]: '障子', [HAY]: '干し草の俵', [PARQUET]: '寄木の床', [SNOW_BRICK]: '雪のレンガ', [GLOW_GLASS]: '灯晶ガラス', [DEEP_TILE]: '深石のタイル',
+  [POLISHED_DEEP]: '磨いた深石', [GOLD_BRICK]: '金の装飾レンガ', [CHECKER]: '市松模様のタイル', [IRON_PLATE]: '鉄の床板', [LANTERN]: '提灯' });
+Object.assign(HARD, { [SMOOTH_STONE]: 3, [CRACKED_BRICK]: 3, [MOSSY_BRICK]: 3, [MOSSY_COBBLE]: 3, [CHISELED_BRICK]: 3, [SMOOTH_SANDSTONE]: 2.5, [CHISELED_SANDSTONE]: 2.5,
+  [PLASTER]: 2, [ROOF_TILE]: 3, [TATAMI]: 0.8, [SHOJI]: 0.6, [HAY]: 0.7, [PARQUET]: 2, [SNOW_BRICK]: 1.5, [GLOW_GLASS]: 0.3, [DEEP_TILE]: 4, [POLISHED_DEEP]: 4,
+  [GOLD_BRICK]: 3, [CHECKER]: 3, [IRON_PLATE]: 5, [LANTERN]: 0.5 });
+for (const b of [SMOOTH_STONE, CRACKED_BRICK, MOSSY_BRICK, MOSSY_COBBLE, CHISELED_BRICK, SMOOTH_SANDSTONE, CHISELED_SANDSTONE, PLASTER, ROOF_TILE, SNOW_BRICK,
+  DEEP_TILE, POLISHED_DEEP, GOLD_BRICK, CHECKER, IRON_PLATE]) { TOOL_FOR[b] = 'pick'; NEED_PICK[b] = 1; }
+TOOL_FOR[PARQUET] = TOOL_FOR[SHOJI] = 'axe';
+GLOW[GLOW_GLASS] = 8; GLOW[LANTERN] = 10;
+SMELT[STONE] = SMOOTH_STONE; SMELT[STONE_BRICK] = CRACKED_BRICK; SMELT[SANDSTONE] = SMOOTH_SANDSTONE; SMELT[DEEPSTONE] = POLISHED_DEEP;
+const isGlassy = b => b === GLASS || b === GLOW_GLASS;   // 光を通して、半透明の組で描くブロック
+// 形のあるブロック: ID 1000 以上（チャンクは Uint16Array で持つ）。
+// 1000 + 素材番号*16 + 形。形: 0=下ハーフ 1=上ハーフ 2〜5=階段（高い側の向き） 6〜9=逆さ階段 10=塀・柵 11=敷物
+// 向き: 0=-z 1=+x 2=+z 3=-x
+const BUILD = [   // [素材, 作れる形]  s=ハーフ・階段  w=塀  f=柵  c=敷物
+  [PLANKS, 'sf'], [COBBLE, 'sw'], [STONE, 's'], [STONE_BRICK, 'sw'], [SANDSTONE, 'sw'], [BRICK, 'sw'], [DEEPSTONE, 's'], [DEEP_BRICK, 'sw'],
+  [RUIN_BRICK, 'sw'], [SMOOTH_STONE, 's'], [MOSSY_BRICK, 'sw'], [MOSSY_COBBLE, 'sw'], [SMOOTH_SANDSTONE, 's'], [PLASTER, 'sw'], [ROOF_TILE, 's'],
+  [SNOW_BRICK, 'sw'], [PARQUET, 's'], [POLISHED_DEEP, 's'], [DEEP_TILE, 's'], [CHECKER, 's'], [GOLD_BRICK, 's'], [WOOL, 'c'], [TATAMI, 'c'],
+];
+const BID = (m, v) => 1000 + m * 16 + v;
+const isShape = b => b >= 1000 && b < 1000 + BUILD.length * 16;
+const shapeMat = b => BUILD[(b - 1000) >> 4][0], shapeForm = b => (b - 1000) & 15;
+// 扉（+向き*4 +開いている*2 +上半分）・跳ね上げ戸（+向き*4 +開*2 +上側）・柵の門（+向き*2 +開）・はしご（+壁の向き）・板ガラス・鉄格子
+const DOOR = 1600, IRON_DOOR = 1616, TRAPDOOR = 1700, GATE = 1720, LADDER = 1730, PANE = 1740, BARS = 1741;
+const isDoor = b => b >= DOOR && b < IRON_DOOR + 16;
+const isTrap = b => b >= TRAPDOOR && b < TRAPDOOR + 16;
+const isGate = b => b >= GATE && b < GATE + 8;
+const isLadder = b => b >= LADDER && b < LADDER + 4;
+const SPRITE_B = new Set([DOOR, IRON_DOOR, LADDER, PANE, BARS]);   // アイコンをドット絵で描く物
+// 置いた状態 → アイテム（壊した時に落とす物）
+function itemOf(b) {
+  if (isShape(b)) { const v = shapeForm(b), base = b - v; return base + (v < 2 ? 0 : v < 10 ? 2 : v); }
+  if (isDoor(b)) return b < IRON_DOOR ? DOOR : IRON_DOOR;
+  if (isTrap(b)) return TRAPDOOR;
+  if (isGate(b)) return GATE;
+  if (isLadder(b)) return LADDER;
+  return b;
+}
+const buildMat = b => isShape(b) ? shapeMat(b) : (b >= IRON_DOOR && b < IRON_DOOR + 16) || b === BARS ? IRON_BLOCK : b === PANE ? GLASS : PLANKS;
+{
+  const reg = (id, name, mat) => { NAME[id] = name; HARD[id] = HARD[mat] || 1; if (TOOL_FOR[mat]) TOOL_FOR[id] = TOOL_FOR[mat]; if (NEED_PICK[mat]) NEED_PICK[id] = NEED_PICK[mat]; };
+  BUILD.forEach(([mat, fl], m) => {
+    if (fl.includes('s')) { reg(BID(m, 0), NAME[mat] + 'のハーフブロック', mat); reg(BID(m, 1), NAME[mat] + 'のハーフブロック', mat); for (let v = 2; v < 10; v++) reg(BID(m, v), NAME[mat] + 'の階段', mat); }
+    if (fl.includes('w')) reg(BID(m, 10), NAME[mat] + 'の塀', mat);
+    if (fl.includes('f')) reg(BID(m, 10), '木の柵', mat);
+    if (fl.includes('c')) reg(BID(m, 11), mat === WOOL ? '羊毛のカーペット' : '畳のござ', mat);
+  });
+  for (let k = 0; k < 16; k++) { reg(DOOR + k, '木の扉', PLANKS); reg(IRON_DOOR + k, '鉄の扉', IRON_BLOCK); reg(TRAPDOOR + k, '跳ね上げ戸', PLANKS); }
+  for (let k = 0; k < 8; k++) reg(GATE + k, '柵の門', PLANKS);
+  for (let k = 0; k < 4; k++) reg(LADDER + k, 'はしご', PLANKS);
+  reg(PANE, '板ガラス', GLASS); reg(BARS, '鉄格子', IRON_BLOCK);
+  HARD[PANE] = 0.3; for (let k = 0; k < 4; k++) HARD[LADDER + k] = 0.4;
+  TOOL_FOR[LADDER] = 'axe';
+}
+// ---- 形 ----
+const T3 = 0.1875;
+const edgeBox = (f, t, y0 = 0, y1 = 1) => f === 0 ? [0, y0, 0, 1, y1, t] : f === 1 ? [1 - t, y0, 0, 1, y1, 1] : f === 2 ? [0, y0, 1 - t, 1, y1, 1] : [0, y0, 0, t, y1, 1];
+const HALFXZ = [[0, 0, 1, 0.5], [0.5, 0, 1, 1], [0, 0.5, 1, 1], [0, 0, 0.5, 1]];   // 向き側の半分 [x0, z0, x1, z1]
+const NB4 = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+const armBox = (d, w, y0, y1) => d === 0 ? [0.5 - w, y0, 0, 0.5 + w, y1, 0.5] : d === 1 ? [0.5, y0, 0.5 - w, 1, y1, 0.5 + w] : d === 2 ? [0.5 - w, y0, 0.5, 0.5 + w, y1, 1] : [0, y0, 0.5 - w, 0.5, y1, 0.5 + w];
+// つながる相手の種類: f=柵（柵の門も） w=塀 p=板ガラス・鉄格子
+const linkKind = b => isShape(b) && shapeForm(b) === 10 ? (shapeMat(b) === PLANKS ? 'f' : 'w') : isGate(b) ? 'f' : b === PANE || b === BARS ? 'p' : '';
+const linksTo = (k, nb) => (nb < 1000 && opaque(nb)) || linkKind(nb) === k || (k === 'p' && isGlassy(nb));
+// ブロックの中の箱（0〜1 の座標）。coll=true は当たり判定用（柵・塀・閉じた門は1.5の高さ）。x が null なら周りを見ない（アイコン用: 前後につながった形）
+function shapeBoxes(b, x, y, z, coll) {
+  const kind = linkKind(b);
+  if (kind) {
+    const L = NB4.map(([dx, dz], d) => x === null ? d % 2 === 0 : linksTo(kind, getBlock(x + dx, y, z + dz)));
+    const H = coll ? 1.5 : 1, out = [];
+    if (isGate(b)) {
+      const k = b - GATE, f = k >> 1, open = k & 1, alongX = (f & 1) === 0;
+      if (open) return coll ? [] : alongX ? [[0, 0, 0.4375, 0.125, 1, 1], [0.875, 0, 0.4375, 1, 1, 1]] : [[0.4375, 0, 0, 1, 1, 0.125], [0.4375, 0, 0.875, 1, 1, 1]];
+      return alongX ? [[0, 0, 0.4375, 1, coll ? 1.5 : 0.95, 0.5625]] : [[0.4375, 0, 0, 0.5625, coll ? 1.5 : 0.95, 1]];
+    }
+    if (kind === 'f') {
+      out.push([0.375, 0, 0.375, 0.625, H, 0.625]);
+      L.forEach((on, d) => { if (!on) return; if (coll) out.push(armBox(d, 0.125, 0, H)); else { out.push(armBox(d, 0.0625, 0.375, 0.5625)); out.push(armBox(d, 0.0625, 0.75, 0.9375)); } });
+    } else if (kind === 'w') {
+      out.push([0.25, 0, 0.25, 0.75, H, 0.75]);
+      L.forEach((on, d) => { if (on) out.push(armBox(d, 0.1875, 0, coll ? H : 0.8125)); });
+    } else {
+      out.push([0.4375, 0, 0.4375, 0.5625, 1, 0.5625]);
+      L.forEach((on, d) => { if (on) out.push(armBox(d, 0.0625, 0, 1)); });
+    }
+    return out;
+  }
+  if (isShape(b)) {
+    const v = shapeForm(b);
+    if (v === 0) return [[0, 0, 0, 1, 0.5, 1]];
+    if (v === 1) return [[0, 0.5, 0, 1, 1, 1]];
+    if (v < 10) { const h = HALFXZ[(v - 2) & 3]; return v >= 6 ? [[0, 0.5, 0, 1, 1, 1], [h[0], 0, h[1], h[2], 0.5, h[3]]] : [[0, 0, 0, 1, 0.5, 1], [h[0], 0.5, h[1], h[2], 1, h[3]]]; }
+    return [[0, 0, 0, 1, 0.0625, 1]];   // 敷物
+  }
+  if (isDoor(b)) { const k = (b - DOOR) & 15, f = k >> 2; return [edgeBox(k & 2 ? (f + 1) & 3 : f, T3)]; }
+  if (isTrap(b)) { const k = b - TRAPDOOR, f = k >> 2; return [k & 2 ? edgeBox(f, T3) : k & 1 ? [0, 1 - T3, 0, 1, 1, 1] : [0, 0, 0, 1, T3, 1]]; }
+  if (isLadder(b)) return [edgeBox(b - LADDER, 0.125)];
+  return [[0, 0, 0, 1, 1, 1]];
+}
+
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -495,7 +602,7 @@ function nearestRuin(x, z) {
   return best;
 }
 function genDeep(cx, cz) {
-  const d = new Uint8Array(CS * CS * H), I = (x, y, z) => (y * CS + z) * CS + x;
+  const d = new Uint16Array(CS * CS * H), I = (x, y, z) => (y * CS + z) * CS + x;
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const wx = cx * CS + x, wz = cz * CS + z, room = Math.abs(wx - 8) <= 3 && Math.abs(wz - 8) <= 3;
     const ru = ruinOf(wx, wz), nearRuin = Math.hypot(wx - ru.x, wz - ru.z) < 48;
@@ -582,7 +689,7 @@ function genDeep(cx, cz) {
 }
 // 虚空: 何も無い空間に、(8,8) を中心にした浮き島が1つ
 function genVoid(cx, cz) {
-  const d = new Uint8Array(CS * CS * H);
+  const d = new Uint16Array(CS * CS * H);
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const wx = cx * CS + x, wz = cz * CS + z, r = Math.hypot(wx - 8, wz - 8);
     if (r > 60) continue;
@@ -594,7 +701,7 @@ function genVoid(cx, cz) {
 function genChunk(cx, cz) {
   if (dim === 1) return genDeep(cx, cz);
   if (dim === 2) return genVoid(cx, cz);
-  const d = new Uint8Array(CS * CS * H);
+  const d = new Uint16Array(CS * CS * H);
   const M = 2, W = CS + M * 2, hm = new Int16Array(W * W), bm = new Uint8Array(W * W);
   for (let z = 0; z < W; z++) for (let x = 0; x < W; x++) {
     const wx = cx * CS + x - M, wz = cz * CS + z - M;
@@ -725,8 +832,8 @@ function batch(fn) {
   meshBatch = new Set();
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM && b !== VOID_PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
-const solid = b => opaque(b) || b === GLASS || b === PORTAL || b === VOID_PORTAL;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
+const opaque = b => b < 1000 && b !== AIR && b !== GLOW_GLASS && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM && b !== VOID_PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const solid = b => opaque(b) || isGlassy(b) || b === PORTAL || b === VOID_PORTAL || (b >= 1000 && !isLadder(b));   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -887,6 +994,42 @@ const WHITE = [1, 1, 1];
     const g = (x === 7 || x === 8) && y >= 3 && y <= 12 || (y === 7 || y === 8) && x >= 3 && x <= 12 || Math.abs(Math.hypot(x - 7.5, y - 7.5) - 5) < 0.6;
     return g ? [255, 222, 120] : frame(x, y) ? [44, 52, 58] : sh([60, 70, 78], (R(x, y, s) - 0.5) * 12);
   }));
+  // ---- 建材（第8弾） ----
+  const brickF = (base, mort) => (x, y, s) => (y % 8 === 7 || (x + (y >> 3) * 8) % 16 === 15) ? mort : sh(base, (R(x >> 1, y >> 1, s) - 0.5) * 14);
+  const mossOver = f => (x, y, s) => { const m = R(x >> 1, y >> 1, s + 7) + (R(x, y, s + 8) - 0.5) * 0.3; return m > 0.62 ? sh([78, 120, 54], (R(x, y, s + 9) - 0.5) * 30) : f(x, y, s); };
+  set(SMOOTH_STONE, mk((x, y, s) => frame(x, y) ? [118, 118, 122] : sh([164, 164, 168], (R(x, y, s) - 0.5) * 6)));
+  set(CRACKED_BRICK, mk((x, y, s) => { const c = Math.abs(x - 3 - Math.floor(y * 0.7)) === 0 || (y > 6 && Math.abs(x - 13 + ((y - 6) >> 1)) === 0); return c ? [60, 60, 64] : brickF([124, 124, 128], [74, 74, 78])(x, y, s); }));
+  set(MOSSY_BRICK, mk(mossOver(brickF([124, 124, 128], [74, 74, 78]))));
+  set(MOSSY_COBBLE, mk(mossOver(cobbleF)));
+  set(CHISELED_BRICK, mk((x, y, s) => { const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5)); return d > 6.6 || Math.floor(d) === 4 || d < 1.6 ? [84, 84, 88] : sh([132, 132, 136], (R(x, y, s) - 0.5) * 10); }));
+  const smSS = mk((x, y, s) => sh([222, 202, 146], (R(x, y, s) - 0.5) * 6));
+  set(SMOOTH_SANDSTONE, smSS);
+  set(CHISELED_SANDSTONE, smSS, mk((x, y, s) => y < 2 || y > 13 ? [196, 172, 112] : (Math.abs(x - 7.5) < 3 && Math.abs(y - 7.5) < 3 && (x + y) % 3 === 0) || Math.abs(Math.hypot(x - 7.5, y - 7.5) - 4.5) < 0.6 ? [170, 140, 84] : sh([222, 202, 146], (R(x, y, s) - 0.5) * 8)), smSS);
+  set(PLASTER, mk((x, y, s) => sh([238, 234, 222], (R(x >> 1, y >> 1, s) - 0.5) * 8)));
+  set(ROOF_TILE, mk((x, y, s) => { const k = (x + (y >> 2) * 4) % 8, r = y % 4; return r === 3 ? [36, 40, 50] : sh([82, 92, 112], (k < 4 ? k : 7 - k) * 6 - r * 4 + (R(x, y, s) - 0.5) * 6); }));
+  const tatTop = mk((x, y, s) => x < 2 || x > 13 ? (y % 4 === 0 ? [40, 60, 36] : [24, 40, 26]) : sh(y % 2 ? [170, 182, 104] : [184, 194, 116], (R(x, y, s) - 0.5) * 10));
+  set(TATAMI, tatTop, mk((x, y, s) => sh([150, 158, 92], (R(x, y, s) - 0.5) * 10)), mk((x, y, s) => sh([130, 120, 80], (R(x, y, s) - 0.5) * 10)));
+  set(SHOJI, mk((x, y, s) => x === 0 || x === 15 || y === 0 || y === 15 || x === 5 || x === 10 || y % 4 === 0 ? [150, 108, 62] : sh([246, 242, 230], (R(x, y, s) - 0.5) * 6)));
+  const hayTop = mk((x, y, s) => sh([212, 182, 70], (R(x >> 1, y, s) - 0.5) * 30));
+  set(HAY, hayTop, mk((x, y, s) => y === 3 || y === 12 ? [140, 52, 40] : sh(R(x, y >> 1, s) > 0.5 ? [214, 186, 74] : [190, 158, 56], (R(x, y, s + 1) - 0.5) * 10)), hayTop);
+  set(PARQUET, mk((x, y, s) => { const blk = ((x >> 2) + (y >> 2)) % 2, line = blk ? x % 4 === 3 : y % 4 === 3; return line ? [104, 72, 38] : sh(blk ? [176, 132, 76] : [150, 108, 60], (R(x, y >> 2, s) - 0.5) * 10); }));
+  set(SNOW_BRICK, mk(brickF([236, 242, 248], [190, 204, 220])));
+  set(GLOW_GLASS, mk((x, y, s) => frame(x, y) ? [170, 236, 250, 236] : R(x, y, s) > 0.93 ? [240, 255, 255, 200] : [150, 226, 246, 70]));
+  set(DEEP_TILE, mk((x, y, s) => x % 8 === 0 || y % 8 === 0 ? [30, 30, 40] : sh([72, 72, 88], (R(x >> 3, y >> 3, s) - 0.5) * 14 + (R(x, y, s + 1) - 0.5) * 6)));
+  set(POLISHED_DEEP, mk((x, y, s) => frame(x, y) ? [40, 40, 52] : sh([78, 78, 94], (R(x, y, s) - 0.5) * 5)));
+  set(GOLD_BRICK, mk((x, y, s) => y === 7 || y === 8 ? (x % 4 === 1 ? [255, 236, 140] : [222, 180, 52]) : brickF([124, 124, 128], [74, 74, 78])(x, y, s)));
+  set(CHECKER, mk((x, y, s) => ((x >> 3) + (y >> 3)) % 2 ? sh([40, 40, 48], (R(x, y, s) - 0.5) * 6) : sh([232, 232, 228], (R(x, y, s) - 0.5) * 6)));
+  set(IRON_PLATE, mk((x, y, s) => frame(x, y) ? [120, 120, 128] : (x + y) % 4 === 0 && (x - y + 16) % 8 < 2 ? [236, 236, 242] : sh([184, 184, 192], (R(x, y, s) - 0.5) * 8)));
+  const lantern = mk((x, y, s) => y < 2 || y > 13 ? [40, 28, 22] : y % 3 === 0 ? [150, 30, 24] : sh([232, 72, 48], 16 - Math.abs(x - 7.5) * 3 + (R(x, y, s) - 0.5) * 6));
+  set(LANTERN, mk((x, y, s) => frame(x, y) ? [40, 28, 22] : [255, 214, 140]), lantern, mk((x, y) => frame(x, y) ? [40, 28, 22] : [60, 40, 30]));
+  // 扉・跳ね上げ戸・はしご・鉄格子（ID 1000 番台の模様。キーは各ブロックの基準 ID）
+  const doorF = (win) => (x, y, s) => { if (frame(x, y) || x === 7 || x === 8) return [104, 72, 38]; if (win && y < 8 && y > 1) return [170, 210, 226]; return planksF(x, y, s); };
+  set(DOOR, mk(doorF(false))); set(DOOR + 1, mk(doorF(true)));
+  const ironDF = win => (x, y, s) => { if (frame(x, y)) return [140, 140, 148]; if (win && y > 1 && y < 7 && x > 2 && x < 13 && x !== 7 && x !== 8) return [60, 60, 70]; return metalF([212, 212, 218])(x, y, s); };
+  set(IRON_DOOR, mk(ironDF(false))); set(IRON_DOOR + 1, mk(ironDF(true)));
+  set(TRAPDOOR, mk((x, y, s) => frame(x, y) || x === 7 || y === 7 ? [104, 72, 38] : (x > 2 && x < 6 && y > 2 && y < 6) || (x > 9 && x < 13 && y > 9 && y < 13) ? [70, 48, 24] : planksF(x, y, s)));
+  set(LADDER, mk((x, y, s) => x === 2 || x === 3 || x === 12 || x === 13 || y % 4 === 1 ? [132, 94, 52] : [0, 0, 0, 0]));
+  set(BARS, mk((x, y) => x % 4 === 1 || y === 0 || y === 15 ? [96, 96, 104, 255] : [0, 0, 0, 0]));
   set(VOID_PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.4 - Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.5 ? [236, 210, 255] : w > -0.2 ? [140, 70, 220] : [34, 14, 60]; }));   // 紫と白の渦
   set(CORE, mk((x, y, s) => R(x, y, s) > 0.93 ? [70, 96, 150] : sh([26, 26, 34], (R(x >> 1, y >> 1, s + 1) - 0.5) * 22)));   // ほぼ黒に青い粒
   set(PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.3 + Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.4 ? [255, 170, 60] : w > -0.3 ? [214, 84, 30] : [70, 20, 16]; }));   // 赤と橙の渦
@@ -897,6 +1040,7 @@ const WHITE = [1, 1, 1];
   const avg = t => { const a = TILE_PX[t]; let r = 0, g = 0, b = 0; for (let i = 0; i < 1024; i += 4) { r += a[i]; g += a[i + 1]; b += a[i + 2]; } return [r / 65280, g / 65280, b / 65280]; };
   for (const k in TILE) if (+k !== GRASS && +k !== BED) COL[k] = TILE[k].map(avg);
 }
+for (const id in NAME) if (+id >= 1000) COL[id] = COL[buildMat(+id)];   // 形のあるブロックの色は素材と同じ（落ちているアイテムの小さい立方体用）
 
 // ---------- メッシュ生成 ----------
 const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -992,10 +1136,11 @@ function torchMesh(V, I, b, wx, y, wz) {
   box(0.5, 0.72, 0.085, [1.0, 0.72, 0.25], [1.0, 0.95, 0.65]);
 }
 // 箱1個ぶんの面を足す（ベッド・苗木など、四角いけれどマスいっぱいではない物用）
-function boxMesh(V, I, x0, y0, z0, x1, y1, z1, ct, cs, lt, tl, ti = 1) {   // ti: 模様番号（指定すると ct・cs の色は使わない）
-  const nk = ti + 0.4 * tl;
-  if (ti > 1) ct = cs = WHITE;
+function boxMesh(V, I, x0, y0, z0, x1, y1, z1, ct, cs, lt, tl, ti = 1) {   // ti: 模様番号（[上, 横, 下] の配列でもよい。指定すると ct・cs の色は使わない）
+  const tt = Array.isArray(ti) ? ti : [ti, ti, ti];
+  if (tt[0] > 1) ct = cs = WHITE;
   for (let f = 0; f < 6; f++) {
+    const nk = (f === 2 ? tt[0] : f === 3 ? tt[2] : tt[1]) + 0.4 * tl;
     const D = DIRS[f], c3 = f === 2 ? ct : cs, l = SHADE[f] * lt, base = V.length / 9;
     for (const c of CORNERS[f]) V.push(c[0] ? x1 : x0, c[1] ? y1 : y0, c[2] ? z1 : z0, c3[0] * l, c3[1] * l, c3[2] * l, D[0] * nk, D[1] * nk, D[2] * nk);
     I.push(base, base + 1, base + 2, base, base + 2, base + 3);
@@ -1032,17 +1177,24 @@ function buildMesh(cx, cz) {
       }
       continue;
     }
+    if (b >= 1000) {   // 形のあるブロック: 中の箱を素材の模様で描く（板ガラス・鉄格子は半透明の組）
+      const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
+      const X = ox + x, Z = oz + z, see = b === PANE || b === BARS;
+      const tiles = isDoor(b) ? TILE[(b < IRON_DOOR ? DOOR : IRON_DOOR) + (b & 1)] : TILE[isTrap(b) ? TRAPDOOR : isLadder(b) ? LADDER : b === BARS ? BARS : buildMat(b)];
+      for (const q of shapeBoxes(b, X, y, Z, false)) boxMesh(see ? wv : ov, see ? wi : oi, X + q[0], y + q[1], Z + q[2], X + q[3], y + q[4], Z + q[5], null, null, lt, tl, tiles);
+      continue;
+    }
     if (isPlant(b)) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0;
       plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1), tl);
       continue;
     }
-    const isG = b === GLASS, isW = b === WATER || isG, bi = d.bio[z * CS + x];   // ガラスも水と同じ半透明の組に入れる
+    const isG = isGlassy(b), isW = b === WATER || isG, bi = d.bio[z * CS + x];   // ガラスも水と同じ半透明の組に入れる
     for (let f = 0; f < 6; f++) {
       const D = DIRS[f], nx = x + D[0], ny = y + D[1], nz = z + D[2];
       if (ny < 0) continue;
       const nb = ny >= H ? AIR : (nx >= 0 && nx < CS && nz >= 0 && nz < CS) ? d[(ny * CS + nz) * CS + nx] : getBlock(ox + nx, ny, oz + nz);
-      if (isG ? (opaque(nb) || nb === GLASS) : isW ? nb !== AIR : opaque(nb)) continue;
+      if (isG ? (opaque(nb) || nb === b) : isW ? nb !== AIR : opaque(nb)) continue;
       const ti = TILE[b] ? TILE[b][FCI[f]] : 1, cs = CORNERS[f];   // この面の模様番号（1 = 模様なし）
       // 模様がある面は、頂点の色を明るさだけにする（草の上面だけはバイオームの草色を掛ける）
       const c3 = ti > 1 ? (b === GRASS && f === 2 ? GTINT[bi][0] : WHITE) : colOf(b, FCI[f], bi);
@@ -1369,6 +1521,13 @@ const SPR = {}, SPR_IDS = [];
     for (let y = 8; y <= 14; y++) { set(7, y, [226, 220, 204]); set(8, y, [196, 188, 170]); }
     each((x, y) => { if ((x - 7.5) ** 2 / 30 + (y - 7) ** 2 / 9 < 1 && y <= 7) set(x, y, (x + y) % 4 === 0 ? [210, 250, 255] : [70, 168, 222]); });
   });
+  // ---- 建材のドット絵 ----
+  const doorSpr = (fr, pn, wn) => set => { for (let y = 0; y < 16; y++) for (let x = 4; x <= 11; x++) set(x, y, x === 4 || x === 11 || y === 0 || y === 15 || y === 8 ? fr : y > 1 && y < 7 && x > 5 && x < 10 ? wn : pn); set(10, 9, [60, 60, 66]); };
+  mk(DOOR, doorSpr([104, 72, 38], [176, 132, 76], [170, 210, 226]));
+  mk(IRON_DOOR, doorSpr([140, 140, 148], [214, 214, 220], [60, 60, 70]));
+  mk(LADDER, set => { for (let y = 0; y < 16; y++) { set(3, y, [132, 94, 52]); set(4, y, [104, 72, 38]); set(11, y, [132, 94, 52]); set(12, y, [104, 72, 38]); } for (let y = 2; y < 16; y += 4) for (let x = 5; x <= 10; x++) set(x, y, [150, 108, 60]); });
+  mk(PANE, set => { for (let y = 1; y < 15; y++) for (let x = 1; x < 15; x++) set(x, y, x === 1 || x === 14 || y === 1 || y === 14 ? [200, 232, 246] : (x + y === 9 || x + y === 10) && x > 3 && x < 8 ? [255, 255, 255] : [150, 200, 226]); });
+  mk(BARS, set => { for (let y = 0; y < 16; y++) for (let x = 1; x < 15; x += 4) { set(x, y, [120, 120, 128]); set(x + 1, y, [80, 80, 88]); } for (let x = 1; x < 15; x++) { set(x, 0, [120, 120, 128]); set(x, 15, [80, 80, 88]); } });
   // ---- おかかっぱの核と特別装備 ----
   mk(OKA_CORE, set => { each((x, y) => { const d = Math.hypot(x - 7.5, y - 8.5); if (d < 6) set(x, y, d < 2.2 ? [220, 255, 200] : d < 4 ? [110, 190, 90] : [60, 110, 52]); }); for (let x = 4; x <= 11; x++) set(x, 2, [226, 226, 216]); for (let x = 5; x <= 10; x++) set(x, 3, [196, 196, 186]); });
   mk(EMBER_SWORD, set => {   // 幅の広い大剣
@@ -1493,29 +1652,57 @@ function spawn() {
   P.y = y + 1;
 }
 const collides = (x, y, z) => boxHit(x, y, z, PW, PH);
-function boxHit(x, y, z, w, h) {   // 幅(半分)w・高さh の箱がブロックにめり込むか
+// 幅(半分)w・高さh の箱がめり込むブロックの箱を集める（list が無ければ1つ見つかった時点で true）。
+// 普通のブロックはマス全体、形のあるブロックは中の箱。柵・塀は1.5の高さがあるので1段下のマスも見る
+function boxHits(x, y, z, w, h, list) {
   const x0 = Math.floor(x - w), x1 = Math.floor(x + w), y0 = Math.floor(y), y1 = Math.floor(y + h), z0 = Math.floor(z - w), z1 = Math.floor(z + w);
-  for (let by = y0; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++)
-    if (solid(getBlock(bx, by, bz))) return true;
-  return false;
+  let hit = false;
+  for (let by = y0 - 1; by <= y1; by++) for (let bz = z0; bz <= z1; bz++) for (let bx = x0; bx <= x1; bx++) {
+    const b = getBlock(bx, by, bz);
+    if (!solid(b)) continue;
+    if (b < 1000) {
+      if (by < y0) continue;
+      if (!list) return true;
+      hit = true; list.push([bx, by, bz, bx + 1, by + 1, bz + 1]); continue;
+    }
+    for (const q of shapeBoxes(b, bx, by, bz, true)) {
+      const a0 = bx + q[0], a1 = by + q[1], a2 = bz + q[2], b0 = bx + q[3], b1 = by + q[4], b2 = bz + q[5];
+      if (b0 <= x - w || a0 >= x + w || b1 <= y || a1 >= y + h || b2 <= z - w || a2 >= z + w) continue;
+      if (!list) return true;
+      hit = true; list.push([a0, a1, a2, b0, b1, b2]);
+    }
+  }
+  return hit;
+}
+const boxHit = (x, y, z, w, h) => boxHits(x, y, z, w, h, null);
+// ぶつかった箱の中で一番手前の面にくっつける。地面にいる時は、半ブロックまでの段差（ハーフ・階段）は自動で登る
+const hitList = (x, y, z) => { const l = []; boxHits(x, y, z, PW, PH, l); return l; };
+function stepUp(l, x, z) {
+  if (!P.onG || inWater) return false;
+  let top = -1e9;
+  for (const q of l) top = Math.max(top, q[4]);
+  if (top - P.y <= 0 || top - P.y > 0.55 || collides(x, top + EPS, z)) return false;
+  P.y = top + EPS; return true;
 }
 function moveAxis(dx, dy, dz) {
   if (dx) {
-    const nx = P.x + dx;
-    if (collides(nx, P.y, P.z)) { P.x = dx > 0 ? Math.floor(nx + PW) - PW - EPS : Math.floor(nx - PW) + 1 + PW + EPS; P.vx = 0; P.blocked = true; }
+    const nx = P.x + dx, l = hitList(nx, P.y, P.z);
+    if (l.length && stepUp(l, nx, P.z)) P.x = nx;
+    else if (l.length) { P.x = dx > 0 ? Math.min(...l.map(q => q[0])) - PW - EPS : Math.max(...l.map(q => q[3])) + PW + EPS; P.vx = 0; P.blocked = true; }
     else if (P.edge && !collides(nx, P.y - 0.6, P.z)) P.vx = 0;   // スニーク中は足場の端で止まる
     else P.x = nx;
   }
   if (dz) {
-    const nz = P.z + dz;
-    if (collides(P.x, P.y, nz)) { P.z = dz > 0 ? Math.floor(nz + PW) - PW - EPS : Math.floor(nz - PW) + 1 + PW + EPS; P.vz = 0; P.blocked = true; }
+    const nz = P.z + dz, l = hitList(P.x, P.y, nz);
+    if (l.length && stepUp(l, P.x, nz)) P.z = nz;
+    else if (l.length) { P.z = dz > 0 ? Math.min(...l.map(q => q[2])) - PW - EPS : Math.max(...l.map(q => q[5])) + PW + EPS; P.vz = 0; P.blocked = true; }
     else if (P.edge && !collides(P.x, P.y - 0.6, nz)) P.vz = 0;
     else P.z = nz;
   }
   if (dy) {
-    const ny = P.y + dy;
-    if (collides(P.x, ny, P.z)) {
-      if (dy < 0) { P.y = Math.floor(ny) + 1; P.ground = true; P.land = Math.max(P.land, -P.vy); } else P.y = Math.floor(ny + PH) - PH - EPS;
+    const ny = P.y + dy, l = hitList(P.x, ny, P.z);
+    if (l.length) {
+      if (dy < 0) { P.y = Math.max(...l.map(q => q[4])); P.ground = true; P.land = Math.max(P.land, -P.vy); } else P.y = Math.min(...l.map(q => q[1])) - PH - EPS;
       P.vy = 0;
     } else P.y = ny;
   }
@@ -1552,6 +1739,13 @@ function update(dt) {
   if (inWater) P.vy = jump ? (P.blocked ? 9 : 3.2) : Math.max(P.vy - 8 * dt, -3);
   else { P.vy = Math.max(P.vy - 26 * dt, -50); if (jump && P.ground) { P.vy = 8.4; if (sprint) drain(0.3); } }
   if (sprint) drain(2.5 * dt);
+  // はしご: 体がはしごのマスにある間は、前に進むかジャンプで登る。何もしなければゆっくり下りる（スニークで止まる）。落下ダメージなし
+  const fx = Math.floor(P.x), fz = Math.floor(P.z);
+  if (isLadder(getBlock(fx, Math.floor(P.y + 0.1), fz)) || isLadder(getBlock(fx, Math.floor(P.y + 1), fz))) {
+    P.land = 0;
+    P.vy = len > 0.1 || jump ? 3.2 : P.sneak ? 0 : Math.max(P.vy, -2.5);
+  }
+  P.onG = P.ground;
   P.ground = false; P.blocked = false;
   const steps = Math.max(1, Math.ceil(Math.max(Math.abs(P.vx), Math.abs(P.vy), Math.abs(P.vz)) * dt / 0.4));
   const h = dt / steps;
@@ -1611,7 +1805,11 @@ function raycast(maxD, water) {   // water=true なら水面にも当たる（�
   let px = x, py = y, pz = z, t = 0;
   while (t <= maxD) {
     const b = getBlock(x, y, z);
-    if ((b !== AIR && b !== WATER) || (water && b === WATER)) return { x, y, z, px, py, pz, b, t };
+    if (b >= 1000) {   // 形のあるブロック: 中の箱に当たった時だけ（ハーフの上の空いた所などは素通り）
+      let best = Infinity;
+      for (const q of shapeBoxes(b, x, y, z, false)) { const h = rayBox([ex, ey, ez], [dx, dy, dz], x + q[0], y + q[1], z + q[2], x + q[3], y + q[4], z + q[5]); if (h !== null && h < best) best = h; }
+      if (best <= maxD) return { x, y, z, px, py, pz, b, t: best };
+    } else if ((b !== AIR && b !== WATER) || (water && b === WATER)) return { x, y, z, px, py, pz, b, t };
     px = x; py = y; pz = z;
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; }
@@ -1633,7 +1831,8 @@ function dropsOf(b, tool) {
     const r = Math.random();
     return r < 0.06 ? [SAPLING] : r < 0.08 ? [APPLE] : [];
   }
-  if (b === GLASS) return [];   // ガラスは割れて無くなる
+  if (b === GLASS || b === PANE) return [];   // ガラス・板ガラスは割れて無くなる
+  if (b >= 1000) return isDoor(b) && b & 1 ? [] : [itemOf(b)];   // 形のあるブロックは元のアイテムに戻る（扉は下半分から1枚）
   if (b === PORTAL || b === VOID_PORTAL) return [];
   if (b === GLOW_ORE) return Array(2 + Math.floor(Math.random() * 2)).fill(GLOW_DUST);   // 灯晶石は灯晶を2〜3個
   if (b === EMBER_ORE) return [EMBER];
@@ -1655,6 +1854,10 @@ function dropsOf(b, tool) {
   return [b];
 }
 function breakBlock(x, y, z, b, tool) {
+  if (isDoor(b)) {   // 扉: もう半分も消す。アイテムは1枚だけ落とす
+    const oy = b & 1 ? y - 1 : y + 1, ob = getBlock(x, oy, z);
+    if (isDoor(ob)) netSet(x, oy, z, AIR, ob, b & 1 ? dropsOf(ob, tool) : []);
+  }
   netSet(x, y, z, AIR, b, dropsOf(b, tool));
   const up = getBlock(x, y + 1, z);
   if (onTop(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));   // 上に生えていた植物も一緒に壊れる
@@ -1698,6 +1901,7 @@ function tryPlace() {
   const st = slots[sel];
   if (st && st.b === TORCH) return placeTorch(st);
   if (st && st.b === SAPLING) return plantSapling(st);
+  if (st && st.b >= 1000) return placeBuild(st);
   if (!target || !st || st.b >= 100) return;
   // 草などを狙っている時は、その場所に置き換える
   const x = isPlant(target.b) ? target.x : target.px, y = isPlant(target.b) ? target.y : target.py, z = isPlant(target.b) ? target.z : target.pz;
@@ -1709,6 +1913,52 @@ function tryPlace() {
   if (--st.n <= 0) slots[sel] = null;
   refreshUI();
 }
+// 形のあるブロックを置く: 狙った面と当たった高さ・向いている方向で形を決める
+function placeBuild(st) {
+  if (!target) return;
+  const d = lookDir(), hy = eyeY() + d[1] * target.t, ny = target.py - target.y, fy = hy - Math.floor(hy);
+  const upper = ny === -1 || (ny === 0 && fy > 0.5);   // 天井側に付けるか（上ハーフ・逆さ階段・上側の跳ね上げ戸）
+  const f = Math.abs(d[0]) > Math.abs(d[2]) ? (d[0] > 0 ? 1 : 3) : (d[2] > 0 ? 2 : 0);   // 向いている方向
+  let x = target.px, y = target.py, z = target.pz, b = st.b;
+  const free = c => c === AIR || c === WATER || isPlant(c);
+  const done = () => { if (--st.n <= 0) slots[sel] = null; refreshUI(); };
+  if (isShape(b)) {
+    const m = (b - 1000) >> 4, v = shapeForm(b), same = c => isShape(c) && ((c - 1000) >> 4) === m && shapeForm(c) < 2;
+    if (v === 0) {   // ハーフ: 同じ素材のハーフに重ねると1ブロックになる
+      const tb = target.b;
+      if (same(tb) && ((shapeForm(tb) === 0 && ny === 1) || (shapeForm(tb) === 1 && ny === -1))) { netSet(target.x, target.y, target.z, BUILD[m][0], tb); done(); return; }
+      const cur = getBlock(x, y, z);
+      if (same(cur)) { netSet(x, y, z, BUILD[m][0], cur); done(); return; }
+      b = BID(m, upper ? 1 : 0);
+    } else if (v === 2) b = BID(m, (upper ? 6 : 2) + f);
+  } else if (b === DOOR || b === IRON_DOOR) {   // 扉: 下と上の2マス
+    if (!free(getBlock(x, y, z)) || !free(getBlock(x, y + 1, z)) || y + 1 >= H || occupied(x, y, z) || occupied(x, y + 1, z)) return;
+    netSets([[x, y, z, b + f * 4, getBlock(x, y, z)], [x, y + 1, z, b + f * 4 + 1, getBlock(x, y + 1, z)]]);
+    done(); return;
+  } else if (b === TRAPDOOR) b = TRAPDOOR + f * 4 + (upper ? 1 : 0);
+  else if (b === GATE) b = GATE + f * 2;
+  else if (b === LADDER) {   // はしご: 横の面にだけ付く。壁のある向きに板を寄せる
+    if (ny !== 0) return;
+    const w = NB4.findIndex(([a, c]) => a === target.x - x && c === target.z - z);
+    if (w < 0) return;
+    b = LADDER + w;
+  }
+  if (y < 1 || y >= H || !free(getBlock(x, y, z))) return;
+  if (!isLadder(b) && x + 1 > P.x - PW && x < P.x + PW && z + 1 > P.z - PW && z < P.z + PW && y + 1 > P.y && y < P.y + PH) return;
+  if (occupied(x, y, z)) return;
+  netSet(x, y, z, b, getBlock(x, y, z));
+  done();
+}
+// 扉・跳ね上げ戸・柵の門を開け閉めする（扉は上下2マスまとめて）
+function toggleOpen(t) {
+  const b = t.b;
+  if (isDoor(b)) {
+    const ly = b & 1 ? t.y - 1 : t.y, lb = getBlock(t.x, ly, t.z), ub = getBlock(t.x, ly + 1, t.z), l = [[t.x, t.y, t.z, b ^ 2, b]];
+    const ob = b & 1 ? lb : ub, oy = b & 1 ? ly : ly + 1;
+    if (isDoor(ob)) l.push([t.x, oy, t.z, ob ^ 2, ob]);
+    netSets(l);
+  } else netSet(t.x, t.y, t.z, isGate(b) ? b ^ 1 : b ^ 2, b);
+}
 // 他のプレイヤー・モブと重なる位置か（そこにはブロックを置けない）
 function occupied(x, y, z) {
   const hit = (px, py, pz, w, h) => x + 1 > px - w && x < px + w && z + 1 > pz - w && z < pz + w && y + 1 > py && y < py + h;
@@ -1719,7 +1969,9 @@ function occupied(x, y, z) {
 // 右クリック: 作業台・かまどを開く → 食べる → クワで耕す → 種を植える → ブロックを置く の順で判定
 function useItem() {
   const st = slots[sel];
-  if (target && !P.sneak && (target.b === TABLE || target.b === FURNACE)) { mouse.r = false; openInv(target.b === TABLE ? 3 : 'furnace'); return; }
+  if (target && !P.sneak && (isDoor(target.b) || isTrap(target.b) || isGate(target.b))) { mouse.r = false; placeCd = 0.25; toggleOpen(target); return; }
+  if (target && !P.sneak && target.b === TABLE) { mouse.r = false; openInv(3); return; }
+  if (target && !P.sneak && target.b === FURNACE) { mouse.r = false; send({ t: 'fopen', x: target.x, y: target.y, z: target.z }); return; }   // かまど: 中身はサーバーにある
   if (target && !P.sneak && target.b === CHEST) {   // チェスト: 中身はサーバーにあるので、開けてよいか聞く
     mouse.r = false; send({ t: 'copen', x: target.x, y: target.y, z: target.z }); return;
   }
@@ -2090,7 +2342,7 @@ const slots = new Array(81).fill(null);   // 54〜80 は開いているチェス
 const HOTBAR = [...Array(9).keys()], STORE = [...Array(27).keys()].map(i => i + 9);
 const INV_ORDER = HOTBAR.concat(STORE), CRAFT = [...Array(9).keys()].map(i => i + 42), CRAFT2 = [42, 43, 45, 46];
 const FURN = [51, 52, 53], CHESTS = [...Array(27).keys()].map(i => i + 54);
-let chestKey = null, chestSent = '';   // 開いているチェストの場所と、最後にサーバーへ送った中身
+let chestKey = null, chestSent = '', furnKey = null, furnSent = '';   // furnKey: 開いているかまどの場所   // 開いているチェストの場所と、最後にサーバーへ送った中身
 let sel = 0, held = null, craftSize = 2, station = 2, burn = 0, smeltT = 0;
 const maxStack = b => (TOOLS[b] || ARMOR[b] || b === BUCKET || b === WATER_BUCKET || b === BED) ? 1 : STACK;
 // 防具枠(36〜39)には、その部位の防具しか入らない
@@ -2144,6 +2396,40 @@ RECIPES.push(   // 特別装備: おかかっぱの核が1つ要る（K=核 E=�
   { p: [' V ', 'VKV', ' S '], k: { V: VOID_GEM, K: OKA_CORE, S: STICK }, out: [VOID_BLADE, 1] },
   { p: [' VK', ' SV', 'S  '], k: { V: VOID_GEM, K: OKA_CORE, S: STICK }, out: [VOID_STAFF, 1] },
   { p: ['V V', 'VKV', 'VVV'], k: { V: VOID_GEM, K: OKA_CORE }, out: [VOID_CLOAK, 1] },
+);
+// 建材: ハーフ（横3つで6個）・階段（6個で4個）・塀（2段で6個）・敷物（横2つで3枚）
+BUILD.forEach(([mat, fl], m) => {
+  if (fl.includes('s')) RECIPES.push({ p: ['MMM'], k: { M: mat }, out: [BID(m, 0), 6] }, { p: ['M  ', 'MM ', 'MMM'], k: { M: mat }, out: [BID(m, 2), 4] });
+  if (fl.includes('w')) RECIPES.push({ p: ['MMM', 'MMM'], k: { M: mat }, out: [BID(m, 10), 6] });
+  if (fl.includes('c')) RECIPES.push({ p: ['MM'], k: { M: mat }, out: [BID(m, 11), 3] });
+});
+const BIDOF = mat => BUILD.findIndex(e => e[0] === mat);
+RECIPES.push(
+  { p: ['PSP', 'PSP'], k: { P: PLANKS, S: STICK }, out: [BID(BIDOF(PLANKS), 10), 3] },   // 木の柵
+  { p: ['SPS', 'SPS'], k: { P: PLANKS, S: STICK }, out: [GATE, 1] },
+  { p: ['PP', 'PP', 'PP'], k: { P: PLANKS }, out: [DOOR, 3] },
+  { p: ['II', 'II', 'II'], k: { I: IRON_INGOT }, out: [IRON_DOOR, 3] },
+  { p: ['PPP', 'PPP'], k: { P: PLANKS }, out: [TRAPDOOR, 2] },
+  { p: ['S S', 'SSS', 'S S'], k: { S: STICK }, out: [LADDER, 3] },
+  { p: ['GGG', 'GGG'], k: { G: GLASS }, out: [PANE, 16] },
+  { p: ['III', 'III'], k: { I: IRON_INGOT }, out: [BARS, 16] },
+  { p: ['SL'], k: { S: STONE_BRICK, L: LEAF }, out: [MOSSY_BRICK, 1] }, { p: ['SL'], k: { S: STONE_BRICK, L: PINELEAF }, out: [MOSSY_BRICK, 1] },
+  { p: ['CL'], k: { C: COBBLE, L: LEAF }, out: [MOSSY_COBBLE, 1] }, { p: ['CL'], k: { C: COBBLE, L: PINELEAF }, out: [MOSSY_COBBLE, 1] },
+  { p: ['S', 'S'], k: { S: BID(BIDOF(STONE_BRICK), 0) }, out: [CHISELED_BRICK, 1] },
+  { p: ['S', 'S'], k: { S: BID(BIDOF(SANDSTONE), 0) }, out: [CHISELED_SANDSTONE, 1] },
+  { p: ['CB', 'BC'], k: { C: CLAY, B: BONE_MEAL }, out: [PLASTER, 4] },
+  { p: ['BBB', 'BCB', 'BBB'], k: { B: BRICK, C: COAL }, out: [ROOF_TILE, 8] },
+  { p: ['WWW', 'WWW'], k: { W: WHEAT }, out: [TATAMI, 2] },
+  { p: ['SWS', 'WSW', 'SWS'], k: { S: STICK, W: WOOL }, out: [SHOJI, 4] },
+  ...nine(0, WHEAT, HAY),
+  { p: ['PL', 'LP'], k: { P: PLANKS, L: LOG }, out: [PARQUET, 4] },
+  { p: ['SS', 'SS'], k: { S: SNOW }, out: [SNOW_BRICK, 4] },
+  { p: ['GGG', 'GDG', 'GGG'], k: { G: GLASS, D: GLOW_DUST }, out: [GLOW_GLASS, 8] },
+  { p: ['DD', 'DD'], k: { D: DEEP_BRICK }, out: [DEEP_TILE, 4] },
+  { p: ['SSS', 'SGS', 'SSS'], k: { S: STONE_BRICK, G: GOLD_INGOT }, out: [GOLD_BRICK, 8] },
+  { p: ['WB', 'BW'], k: { W: SMOOTH_STONE, B: POLISHED_DEEP }, out: [CHECKER, 4] },
+  { p: ['II', 'II'], k: { I: IRON_INGOT }, out: [IRON_PLATE, 4] },
+  { p: ['W', 'T', 'W'], k: { W: WOOL, T: TORCH }, out: [LANTERN, 1] },
 );
 const ARMOR_PAT = [['MMM', 'M M'], ['M M', 'MMM', 'MMM'], ['MMM', 'M M', 'M M'], ['M M', 'M M']];
 ARMOR_TIERS.forEach(ti => ARMOR_PAT.forEach((p, pi) => RECIPES.push({ p, k: { M: TIERS[ti].mat }, out: [armorId(ti, pi), 1], hide: ti > 2 })));
@@ -2205,6 +2491,18 @@ function icon(b) {
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
       const o = (y * 16 + x) * 4;
       if (a[o + 3]) { g.fillStyle = `rgb(${a[o]},${a[o + 1]},${a[o + 2]})`; g.fillRect(x * 4, y * 4, 4, 4); }
+    }
+    return icons[b] = c.toDataURL();
+  }
+  if (b >= 1000) {   // 形のあるブロック: 中の箱を斜めから見た形で、素材の色で塗る
+    const S = (x, y, z) => [32 + 27 * x - 27 * z, 5 + 13 * x + 13 * z + 29 * (1 - y)];
+    const col = COL[buildMat(b)], rgb = (c, m) => `rgb(${c.map(v => Math.round(Math.min(1, v) * m * 255)).join(',')})`;
+    const poly = (pts, c) => { g.fillStyle = c; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath(); g.fill(); };
+    const bx = shapeBoxes(b, null, 0, 0, false).sort((a, c) => (a[0] + a[2] + a[1]) - (c[0] + c[2] + c[1]));
+    for (const [x0, y0, z0, x1, y1, z1] of bx) {
+      poly([S(x0, y1, z0), S(x1, y1, z0), S(x1, y1, z1), S(x0, y1, z1)], rgb(col[0], 1));
+      poly([S(x0, y1, z1), S(x1, y1, z1), S(x1, y0, z1), S(x0, y0, z1)], rgb(col[1], 0.82));
+      poly([S(x1, y1, z0), S(x1, y1, z1), S(x1, y0, z1), S(x1, y0, z0)], rgb(col[1], 0.6));
     }
     return icons[b] = c.toDataURL();
   }
@@ -2276,6 +2574,8 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  '建材: ハーフ（横3つ）・階段（6個）・塀（2段）・柵・扉・跳ね上げ戸・柵の門・はしご・板ガラス・鉄格子。扉などは右クリックで開け閉め（何か持っていても開く。置きたい時はスニーク）。ハーフと階段の半段は歩くだけで登れる。',
+  'かまど: 中身はかまどに残り、閉じても誰もいなくても焼け続ける。',
   'おかかっぱ: 遺跡の大広間にいるボス。近いと殴り、離れると岩を投げる（溜めの間に横へよける）。倒すと広間の真ん中に虚空への門が開き、核を落とす。核で紅炎の大剣・噴火の槌・紅炎の弓・虚晶の刃・虚晶の杖・虚無の外套が作れる。',
   '導きの目: 地底で右クリックすると、一番近い遺跡の方へ飛んでいく（2割で砕ける）。遺跡の四隅にはチェストがある。',
   '地底: 深石の地下世界。灯晶石（石のツルハシ）・黒鉄鉱（鉄）・紅炎石（ダイヤ、深い所）・虚晶石（黒鉄、遺跡の近く）が採れる。全身そろえると 紅炎=爆発ダメージ半分＋殴った相手が燃える、虚晶=落下ダメージなし＋敵に気づかれにくい。',
@@ -2302,6 +2602,10 @@ function refreshUI() {
   if (chestKey && invOpen) {   // チェストの中身が変わるたびにサーバーへ送る（閉じる前に切断しても消えないように）
     const cs = CHESTS.map(i => slots[i]), js = JSON.stringify(cs);
     if (js !== chestSent) { chestSent = js; send({ t: 'cput', key: chestKey, slots: cs }); }
+  }
+  if (furnKey && invOpen) {   // かまどの中身も変わるたびに送る
+    const fs2 = FURN.map(i => slots[i]), js = JSON.stringify(fs2);
+    if (js !== furnSent) { furnSent = js; send({ t: 'fput', key: furnKey, slots: fs2, burn, prog: smeltT }); }
   }
 }
 function slotClick(i, right, shift) {
@@ -2399,8 +2703,14 @@ function openInv(mode) {   // 2=手持ちクラフト, 3=作業台, 'furnace'=�
 }
 function closeInv() {
   // クラフト枠と手持ちはインベントリへ戻す。入りきらなければ足元にドロップ
+  if (furnKey) {   // かまどの中身は戻さず、焼け具合ごとサーバーへ預ける（閉じた後もサーバーで焼け続ける）
+    send({ t: 'fput', key: furnKey, slots: FURN.map(i => slots[i]), burn, prog: smeltT });
+    send({ t: 'fclose', key: furnKey });
+    for (const i of FURN) slots[i] = null;
+    furnKey = null; furnSent = '';
+  }
   const back = CRAFT.concat(FURN).map(i => { const s = slots[i]; slots[i] = null; return s; }).concat([held]);
-  held = null; drag = null; smeltT = 0;
+  held = null; drag = null; smeltT = 0; burn = 0;
   if (chestKey) {   // チェストの中身は戻さず、最後の状態を送って閉じる
     send({ t: 'cput', key: chestKey, slots: CHESTS.map(i => slots[i]) });
     send({ t: 'cclose', key: chestKey });
@@ -2416,7 +2726,7 @@ function closeInv() {
   refreshUI(); lock();
 }
 
-// かまど: 開いている間だけ焼ける。1個3秒。閉じると中身はインベントリに戻る
+// かまど: 1個3秒。開いている間はこのブラウザが焼き、閉じるとサーバーが続きを焼く
 function updateFurnace(dt) {
   if (!invOpen || station !== 'furnace') return;
   const inp = slots[51], out = slots[53], prod = inp ? SMELT[inp.b] : 0;
@@ -2668,6 +2978,15 @@ const NET = {
     openInv('chest');
   },
   cbusy() { toast('他の人がこのチェストを使っている'); },
+  fopen(m) {   // かまどを開けてよい → 中身と焼け具合を受け取る
+    if (invOpen) closeInv();
+    FURN.forEach((i, k) => { const st = m.slots[k]; slots[i] = st && NAME[st.b] ? st : null; });
+    burn = m.burn || 0; smeltT = m.prog || 0;
+    furnKey = m.key; furnSent = JSON.stringify(FURN.map(i => slots[i]));
+    openInv('furnace');
+  },
+  fbusy() { toast('他の人がこのかまどを使っている'); },
+  fgone() { if (furnKey) { for (const i of FURN) slots[i] = null; furnKey = null; furnSent = ''; if (invOpen) closeInv(); toast('かまどが壊された'); } },   // 開いている間に誰かが壊した（中身はその場に落ちている）
   wake(m) { wake(true); if (m.msg) toast(m.msg); },
   mshear(m) { const mb = mobs.get(m.id); if (mb) mb.sheared = !!m.v; },
   item(m) { m.it.age = 0; items.push(m.it); },
@@ -2922,7 +3241,8 @@ function mobMove(m, K, dx, dy, dz) {
   if (dz) { const nz = m.z + dz; if (boxHit(m.x, m.y, nz, K.w, K.h)) wall = true; else m.z = nz; }
   if (dy) {
     const ny = m.y + dy;
-    if (boxHit(m.x, ny, m.z, K.w, K.h)) { if (dy < 0) { m.y = Math.floor(ny) + 1; m.ground = true; } m.vy = 0; }
+    const l = []; boxHits(m.x, ny, m.z, K.w, K.h, l);
+    if (l.length) { if (dy < 0) { m.y = Math.max(...l.map(q => q[4])); m.ground = true; } m.vy = 0; }
     else m.y = ny;
   }
   return wall;

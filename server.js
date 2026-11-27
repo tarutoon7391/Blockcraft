@@ -18,7 +18,7 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 77;   // 77=虚空の門   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, FURNACE = 22, MAX_BLOCK = 98;   // 77=虚空の門 78〜98=飾りブロック   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 8; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
@@ -28,8 +28,8 @@ for (let b = 61; b <= MAX_BLOCK; b++) ITEM_IDS.add(b);   // 地底のブロッ�
 for (let i = 150; i <= 160; i++) ITEM_IDS.add(i);   // 154=おかかっぱの核 155〜160=特別装備        // 灯晶・黒鉄インゴット・紅炎・虚晶
 for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 8; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
-const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== CORE;   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
-const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
+const validBlock = b => Number.isInteger(b) && ((b >= 0 && b <= MAX_BLOCK && b !== CORE) || (b >= 1000 && b < 1800));   // 1000〜: 階段・ハーフ・扉などの形のあるブロック   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
+const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && (b < 24 || b >= 1000)) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
 // ---- 地底の遺跡（ブラウザの ruinOf / ruinBlock と同じ計算） ----
 // 遺跡のチェストは地形の一部なので edits に無い。場所を計算で見分けて、最初に開けた時に中身を入れる
@@ -44,6 +44,11 @@ function ruinCenter(x, z) {   // 地底のこの場所が属する遺跡の中�
   const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
   return { x: i * RUIN_CELL + 64 + Math.floor(hash2(i, j, 860, sd) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash2(i, j, 861, sd) * 192) };
 }
+// ---- かまど ----
+// 中身はサーバーが持つ。誰かが開いている間はその人のブラウザが焼き、閉じている間はサーバーが焼く（ブラウザの SMELT・FUEL と同じ表）
+const SMELT = { 19: 102, 20: 103, 15: 3, 6: 108, 120: 121, 122: 123, 124: 125, 4: 41, 42: 43, 139: 140, 69: 151, 3: 78, 40: 79, 14: 83, 61: 94 };
+const FUEL = { 101: 8, 6: 1.5, 16: 1.5, 100: 0.5, 108: 8, 152: 64 };
+const furnaces = new Map();   // "x,y,z" → { slots: [材料, 燃料, 完成品], burn, prog, user }
 const cleared = new Set();   // おかかっぱを倒した遺跡（"x,z"）。もう出てこない
 function isRuinChest(d, x, y, z) {
   if (d !== 1 || y !== RUIN_Y) return false;
@@ -78,6 +83,7 @@ try {
   for (const k in w.edits) edits.set(k, w.edits[k]);
   for (const k in (w.chests || {})) chests.set(k, { slots: w.chests[k], user: 0 });
   for (const k of (w.cleared || [])) cleared.add(k);
+  for (const k in (w.furnaces || {})) { const f = w.furnaces[k]; furnaces.set(k, { slots: f.slots, burn: f.burn || 0, prog: f.prog || 0, user: 0 }); }
   console.log(`ワールド読み込み: seed=${seed} 変更ブロック=${edits.size}`);
 } catch (e) {
   console.log(`新しいワールドを作成: seed=${seed}`);
@@ -87,7 +93,7 @@ function save() {
   if (!dirty) return;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits), chests: Object.fromEntries([...chests].map(([k, c]) => [k, c.slots])), cleared: [...cleared] }));
+    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits), chests: Object.fromEntries([...chests].map(([k, c]) => [k, c.slots])), cleared: [...cleared], furnaces: Object.fromEntries([...furnaces].map(([k, f]) => [k, { slots: f.slots, burn: f.burn, prog: f.prog }])) }));
     fs.renameSync(FILE + '.tmp', FILE);   // 書き込み途中で落ちても壊れないよう、別名で書いてから差し替える
     dirty = false;
   } catch (e) { console.error('保存失敗:', e.message); }
@@ -95,6 +101,23 @@ function save() {
 // 変更があれば3秒ごとに保存する。再デプロイ時は新しいサーバーが先にファイルを読み込み、
 // その後で古いサーバーが最後の保存をするため、最後の保存は新しい方に届かない。間隔を短くして消える分を最大3秒にする
 setInterval(save, 3000);
+// 閉じているかまどを1秒ずつ進める（1個3秒、燃料1個で FUEL 個ぶん）
+setInterval(() => {
+  for (const f of furnaces.values()) {
+    if (f.user && players.has(f.user)) continue;   // 開いている人がいる間はその人が焼く
+    const [inp, fu, out] = f.slots, prod = inp ? SMELT[inp.b] : 0;
+    if (!prod || (out && (out.b !== prod || out.n >= 64))) { f.prog = 0; continue; }
+    if (f.burn <= 0) {
+      if (!fu || !FUEL[fu.b]) { f.prog = 0; continue; }
+      f.burn += FUEL[fu.b]; fu.n--; if (fu.n <= 0) f.slots[1] = null;
+    }
+    f.prog += 1 / 3; f.burn -= 1 / 3; dirty = true;
+    if (f.prog >= 1 - 1e-9) {
+      f.prog = 0; inp.n--; if (inp.n <= 0) f.slots[0] = null;
+      if (out) out.n++; else f.slots[2] = { b: prod, n: 1 };
+    }
+  }
+}, 1000);
 // 燃えている物（紅炎の全身で殴られた）: 1秒ごとに モブ=2 プレイヤー=1 のダメージ、3秒で消える
 setInterval(() => {
   for (const mob of mobs.values()) {
@@ -223,6 +246,15 @@ function openVoidGate(mob) {
   curDim = keep;
   broadcast({ t: 'chat', name: '', text: 'おかかっぱが倒された。遺跡に虚空への門が開いた' });
 }
+// かまどが壊された → 中身をその場に落とす
+function dropFurnace(key, b, x, y, z, by) {
+  const f = furnaces.get(key);
+  if (!f || b === FURNACE) return;
+  furnaces.delete(key);
+  const u = players.get(f.user);
+  if (u) sendTo(u.ws, { t: 'fgone' });
+  for (const st of f.slots) if (st) spawnItem({ b: st.b, n: st.n, x: x + 0.5, y: y + 0.3, z: z + 0.5, vx: (Math.random() - 0.5) * 2, vy: 2.5, vz: (Math.random() - 0.5) * 2, delay: 0.4 }, by);
+}
 // 作物・苗木の場所を覚えておく（成長させる対象）
 function track(key, b) {
   if (growing(b)) crops.add(key); else crops.delete(key);
@@ -253,6 +285,7 @@ const handlers = {
     edits.set(key, b); dirty = true;
     track(key, b);
     bDim({ t: 'set', x, y, z, b }, p.ws);
+    dropFurnace(key, b, x, y, z, p.id);
     const ch = chests.get(key);
     if (ch && b !== CHEST) {   // チェストが壊された → 中身をその場に落とす
       chests.delete(key);
@@ -281,6 +314,7 @@ const handlers = {
       if (cur === undefined && b !== CHEST && isRuinChest(curDim, x, y, z) && !chests.has(key)) chests.set(key, { slots: ruinLoot(), user: 0 });
       edits.set(key, b); dirty = true; track(key, b);
       ok.push([x, y, z, b]);
+      dropFurnace(key, b, x, y, z, p.id);
       const ch = chests.get(key);
       if (ch && b !== CHEST) {   // 爆発などでチェストが消えた → 中身を落とす
         chests.delete(key);
@@ -319,6 +353,30 @@ const handlers = {
     ch.slots = out; dirty = true;
   },
   cclose(p, m) { const ch = chests.get(m.key); if (ch && ch.user === p.id) ch.user = 0; },
+  fopen(p, m) {
+    const { x, y, z } = m;
+    if (![x, y, z].every(Number.isInteger)) return;
+    const key = kOf(x, y, z);
+    if (edits.get(key) !== FURNACE || (p.x - x) ** 2 + (p.z - z) ** 2 > 100) return;
+    let f = furnaces.get(key);
+    if (!f) { f = { slots: [null, null, null], burn: 0, prog: 0, user: 0 }; furnaces.set(key, f); }
+    if (f.user && f.user !== p.id && players.has(f.user)) { sendTo(p.ws, { t: 'fbusy' }); return; }
+    for (const o of furnaces.values()) if (o.user === p.id) o.user = 0;
+    f.user = p.id;
+    sendTo(p.ws, { t: 'fopen', key, slots: f.slots, burn: f.burn, prog: f.prog });
+  },
+  fput(p, m) {
+    const f = furnaces.get(m.key);
+    if (!f || f.user !== p.id || !Array.isArray(m.slots) || m.slots.length !== 3) return;
+    const out = [];
+    for (const st of m.slots) {
+      if (st == null) { out.push(null); continue; }
+      if (typeof st !== 'object' || !validItem(st.b) || !Number.isInteger(st.n) || st.n < 1 || st.n > 64) return;
+      out.push({ b: st.b, n: st.n });
+    }
+    f.slots = out; f.burn = num(m.burn) ? Math.max(0, Math.min(64, m.burn)) : 0; f.prog = num(m.prog) ? Math.max(0, Math.min(1, m.prog)) : 0; dirty = true;
+  },
+  fclose(p, m) { const f = furnaces.get(m.key); if (f && f.user === p.id) f.user = 0; },
   // ベッドに入った・出た
   sleep(p, m) {
     if (m.v && p.dim !== 0) { sendTo(p.ws, { t: 'wake', msg: '寝られるのは地上だけ' }); return; }
@@ -463,7 +521,7 @@ const handlers = {
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
   hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
-  dim: [1, 3], sets: [6, 20], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], boom: [4, 12], fuse: [8, 20], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
+  dim: [1, 3], sets: [6, 20], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], boom: [4, 12], fuse: [8, 20], copen: [4, 8], cput: [30, 60], cclose: [4, 8], fopen: [4, 8], fput: [30, 60], fclose: [4, 8],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
