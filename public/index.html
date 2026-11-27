@@ -2102,13 +2102,14 @@ function useBlade() {
 
 // ---------- ベッド・防具・盾・バケツ・苗木（第2弾） ----------
 function toast(text) { toastEl.textContent = text; toastEl.style.opacity = 1; setTimeout(() => { toastEl.style.opacity = 0; }, 2200); }
-// ベッド: 右クリックで復活地点になる。夜なら寝る（全員が寝ると朝になる）
+// ベッド: 右クリックで復活地点になり、そのまま寝る。全員が寝ると、夜なら朝に、昼なら夜になる
 let sleeping = false;
 const nightNow = () => tod > 0.76 || tod < 0.24;
 function useBed(t) {
   P.bed = { x: t.x, y: t.y, z: t.z, dim };
   saveLocal();
-  if (!nightNow()) { toast('復活地点をこのベッドにした（寝られるのは夜だけ）'); return; }
+  if (dim !== 0) { toast('復活地点をこのベッドにした（寝られるのは地上だけ）'); return; }
+  $('sleep').innerHTML = nightNow() ? '就寝中……<br>全員がベッドに入ると朝になる（何かキーを押すと起きる）' : '夜まで休憩中……<br>全員がベッドに入ると夜になる（何かキーを押すと起きる）';
   sleeping = true; $('sleep').style.display = 'flex';
   for (const k in keys) keys[k] = false;
   mouse.l = mouse.r = false;
@@ -3749,8 +3750,8 @@ function explode(x, y, z, r, mobId) {
     if (Math.hypot(dx, dy, dz) > r - Math.random() * 0.8) continue;   // ふちは少しガタつかせる
     const bx = f(x) + dx, by = f(y) + dy, bz = f(z) + dz, b = getBlock(bx, by, bz);
     if (by < 1 || by >= H || b === AIR || b === WATER || b === CORE || b === VOID_PORTAL) continue;
-    if (b === BEDROCK) {   // 岩盤: 6% で割れて、岩盤ブロックを落とす（それ以外はびくともしない）
-      if (Math.random() < 0.06) netSet(bx, by, bz, AIR, BEDROCK, [BEDROCK]);
+    if (b === BEDROCK) {   // 岩盤: 10% で割れて、岩盤ブロックを落とす（それ以外はびくともしない）
+      if (Math.random() < 0.1) netSet(bx, by, bz, AIR, BEDROCK, [BEDROCK]);
       continue;
     }
     if (b === BOMB) chain.push([bx, by, bz]);   // 巻き込まれた爆薬は誘爆する

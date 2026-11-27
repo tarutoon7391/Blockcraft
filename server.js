@@ -264,10 +264,11 @@ function track(key, b) {
 function checkSleep() {
   const ps = [...players.values()].filter(p => p.y > -50 && p.dim === 0);   // 地上にいる人だけで数える
   if (!ps.length || !ps.every(p => p.sleep)) return;
-  tod = 0.26; dirty = true;
+  const night = isNight();   // 夜に寝たら朝、昼に寝たら夜（日暮れ直後）にする
+  tod = night ? 0.26 : 0.78; dirty = true;
   for (const p of ps) p.sleep = false;
   broadcast({ t: 'tod', v: tod });
-  broadcast({ t: 'wake', msg: '朝になった' });
+  broadcast({ t: 'wake', msg: night ? '朝になった' : '夜になった' });
 }
 const handlers = {
   // ブロックの破壊・設置。was は「変える前に何があったか」。
@@ -380,7 +381,6 @@ const handlers = {
   // ベッドに入った・出た
   sleep(p, m) {
     if (m.v && p.dim !== 0) { sendTo(p.ws, { t: 'wake', msg: '寝られるのは地上だけ' }); return; }
-    if (m.v && !isNight()) { sendTo(p.ws, { t: 'wake', msg: '寝られるのは夜だけ' }); return; }
     if (!!m.v === !!p.sleep) return;
     p.sleep = !!m.v;
     if (p.sleep) {
