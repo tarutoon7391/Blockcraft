@@ -33,16 +33,17 @@ const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && (b < 24 || (b
 const num = v => typeof v === 'number' && Number.isFinite(v);
 // ---- 地底の遺跡（ブラウザの ruinOf / ruinBlock と同じ計算） ----
 // 遺跡のチェストは地形の一部なので edits に無い。場所を計算で見分けて、最初に開けた時に中身を入れる
-const RUIN_CELL = 320, RUIN_Y = 14;
+const RUIN_CELL = 480;
 function hash2(x, z, s, sd) {
   let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263) + Math.imul(s + sd, 1442695041)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   h = Math.imul(h ^ (h >>> 15), 2246822519);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-function ruinCenter(x, z) {   // 地底のこの場所が属する遺跡の中心
+function ruinCenter(x, z) {   // 地底のこの場所が属する区画の遺跡（無ければ null）。y は広間の床の高さ
   const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
-  return { x: i * RUIN_CELL + 64 + Math.floor(hash2(i, j, 860, sd) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash2(i, j, 861, sd) * 192) };
+  if (hash2(i, j, 863, sd) > 0.55) return null;
+  return { x: i * RUIN_CELL + 80 + Math.floor(hash2(i, j, 860, sd) * 320), z: j * RUIN_CELL + 80 + Math.floor(hash2(i, j, 861, sd) * 320), y: 10 + Math.floor(hash2(i, j, 862, sd) * 14) };
 }
 // ---- かまど ----
 // 中身はサーバーが持つ。誰かが開いている間はその人のブラウザが焼き、閉じている間はサーバーが焼く（ブラウザの SMELT・FUEL と同じ表）
@@ -51,10 +52,9 @@ const FUEL = { 101: 8, 6: 1.5, 16: 1.5, 100: 0.5, 108: 8, 152: 64 };
 const furnaces = new Map();   // "x,y,z" → { slots: [材料, 燃料, 完成品], burn, prog, user }
 const cleared = new Set();   // おかかっぱを倒した遺跡（"x,z"）。もう出てこない
 function isRuinChest(d, x, y, z) {
-  if (d !== 1 || y !== RUIN_Y) return false;
-  const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
-  const rx = i * RUIN_CELL + 64 + Math.floor(hash2(i, j, 860, sd) * 192), rz = j * RUIN_CELL + 64 + Math.floor(hash2(i, j, 861, sd) * 192);
-  return Math.abs(x - rx) === 9 && Math.abs(z - rz) === 9;
+  if (d !== 1) return false;
+  const c = ruinCenter(x, z);
+  return !!c && y === c.y && Math.abs(x - c.x) === 9 && Math.abs(z - c.z) === 9;
 }
 function ruinLoot() {
   const sl = Array(27).fill(null), R = n => 1 + Math.floor(Math.random() * n);
@@ -171,7 +171,7 @@ const MOB_DEF = {
   cow: { hp: 10, drop: [122, 1, 2] },
   chicken: { hp: 4, drop: [124, 1, 1], extra: [142, 0, 2] },   // 肉と羽
   sheep: { hp: 8, drop: [WOOL, 1, 1] },
-  okakappa: { hp: 150, hostile: true, atk: 6, name: 'おかかっぱ', drop: [154, 1, 1], extra: [153, 1, 2], boss: true },   // 遺跡のボス: 核と虚晶
+  okakappa: { hp: 300, hostile: true, atk: 10, pierce: 0.5, name: 'おかかっぱ', drop: [154, 1, 1], extra: [153, 1, 2], boss: true },   // 遺跡のボス: 核と虚晶
 };
 const ANIMALS = ['pig', 'cow', 'chicken', 'sheep'];
 const isNight = () => tod > 0.76 || tod < 0.24;
@@ -241,7 +241,7 @@ function openVoidGate(mob) {
   cleared.add(mob.ruin); dirty = true;
   const [rx, rz] = mob.ruin.split(',').map(Number), keep = curDim, l = [];
   curDim = 1;
-  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { edits.set(kOf(rx + dx, RUIN_Y, rz + dz), 77); l.push([rx + dx, RUIN_Y, rz + dz, 77]); }
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { edits.set(kOf(rx + dx, mob.ry, rz + dz), 77); l.push([rx + dx, mob.ry, rz + dz, 77]); }
   bDim({ t: 'sets', l });
   curDim = keep;
   broadcast({ t: 'chat', name: '', text: 'おかかっぱが倒された。遺跡に虚空への門が開いた' });
@@ -450,7 +450,7 @@ const handlers = {
     if (!mob || mob.owner !== p.id || !MOB_DEF[mob.kind].hostile || !q || dist2(mob, q) > (m.ranged ? 30 * 30 : 16)) return;
     const l = Math.hypot(q.x - mob.x, q.z - mob.z) || 1;
     const def = MOB_DEF[mob.kind], kb = m.ranged ? 4 : 5;
-    sendTo(q.ws, { t: 'hurt', dmg: def.atk, kx: (q.x - mob.x) / l * kb, kz: (q.z - mob.z) / l * kb, cause: def.name });
+    sendTo(q.ws, { t: 'hurt', dmg: def.atk, kx: (q.x - mob.x) / l * kb, kz: (q.z - mob.z) / l * kb, cause: def.name, pierce: def.pierce || 0 });
   },
   // 矢を撃った（他の人の画面にも同じ矢を飛ばすための合図。当たり判定は撃った側がやる）
   shoot(p, m) {
@@ -462,7 +462,8 @@ const handlers = {
   boom(p, m) {
     if (![m.x, m.y, m.z, m.r].every(num) || m.r < 1 || m.r > 5 || dist2(p, m) > 64 * 64) return;
     const pw = num(m.pw) ? Math.max(0.2, Math.min(1, m.pw)) : 1;   // 強さの倍率（おかかっぱの岩・紅炎の矢は弱め）
-    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, fake: m.fake ? 1 : 0, pw }, p.ws);
+    const pi = num(m.pi) ? Math.max(0, Math.min(0.5, m.pi)) : 0;   // 防具を無視する割合
+    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, fake: m.fake ? 1 : 0, pw, pi }, p.ws);
     if (m.fake || m.nb) return;   // nb: モブには当たらない（おかかっぱの岩）   // 門が開く時の見た目だけの爆発: モブにもダメージなし
     const self = mobs.get(m.mob);
     if (self && self.owner === p.id && self.kind === 'boomer') { mobs.delete(self.id); broadcast({ t: 'mrm', id: self.id }); }   // 自爆したタルボム（何も落とさない）
@@ -623,10 +624,12 @@ setInterval(() => {
   // 地底: 遺跡の大広間に近づいた人がいて、まだ倒していなければ、おかかっぱを台の上に出す
   for (const p of all) {
     if (p.dim !== 1) continue;
-    const c = ruinCenter(Math.floor(p.x), Math.floor(p.z)), key = c.x + ',' + c.z;
-    if (cleared.has(key) || (p.x - c.x - 0.5) ** 2 + (p.z - c.z - 0.5) ** 2 > 22 * 22 || Math.abs(p.y - RUIN_Y) > 10) continue;
+    const c = ruinCenter(Math.floor(p.x), Math.floor(p.z));
+    if (!c) continue;
+    const key = c.x + ',' + c.z;
+    if (cleared.has(key) || (p.x - c.x - 0.5) ** 2 + (p.z - c.z - 0.5) ** 2 > 22 * 22 || Math.abs(p.y - c.y) > 10) continue;
     if ([...mobs.values()].some(m => m.ruin === key)) continue;
-    const mob = { id: nextMob++, kind: 'okakappa', x: c.x + 0.5, y: RUIN_Y + 1, z: c.z + 0.5, yaw: 0, hp: MOB_DEF.okakappa.hp, owner: p.id, dim: 1, ruin: key };
+    const mob = { id: nextMob++, kind: 'okakappa', x: c.x + 0.5, y: c.y + 1, z: c.z + 0.5, yaw: 0, hp: MOB_DEF.okakappa.hp, owner: p.id, dim: 1, ruin: key, ry: c.y };
     mobs.set(mob.id, mob);
     curDim = 1; bDim({ t: 'mob', m: mob });
   }

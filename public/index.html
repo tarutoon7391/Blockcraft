@@ -568,18 +568,27 @@ function deepAir(wx, y, wz) {   // 地形の元になる空洞（飾りを付け
 }
 const deepForest = (wx, wz) => fbm(wx * 0.012, wz * 0.012, 830, 3) > 0.57;   // 光るキノコの森
 // 遺跡の場所（中身は次の段階で作る）。320 ブロック四方に1つ。虚晶石はこの近くにだけ出る
-const RUIN_CELL = 320;
-function ruinOf(wx, wz) {
-  const i = Math.floor(wx / RUIN_CELL), j = Math.floor(wz / RUIN_CELL);
-  return { x: i * RUIN_CELL + 64 + Math.floor(hash(i, j, 860) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash(i, j, 861) * 192) };
+// 480 ブロック四方の区画のうち、半分ほどにだけ遺跡がある。場所も高さ（床 y=10〜23）も区画ごとにばらばら
+const RUIN_CELL = 480;
+function ruinAt(i, j) {
+  if (hash(i, j, 863) > 0.55) return null;
+  return { x: i * RUIN_CELL + 80 + Math.floor(hash(i, j, 860) * 320), z: j * RUIN_CELL + 80 + Math.floor(hash(i, j, 861) * 320), y: 10 + Math.floor(hash(i, j, 862) * 14) };
 }
-// 遺跡: 中心 (ruinOf) の周りに 25x25 の大広間（中は 21x21、高さ10）。四方の壁の真ん中から長さ22の通路が延びる。
+const ruinOf = (wx, wz) => ruinAt(Math.floor(wx / RUIN_CELL), Math.floor(wz / RUIN_CELL));   // その場所の区画の遺跡（無ければ null）
+// 遺跡: 中心の周りに 25x25 の大広間（中は 21x21、高さ10）。四方の壁の真ん中から長さ8の通路が延び、先は岩でふさがっている。
+// 全体を厚い深石で包んで地中に埋めるので、洞窟からはまず見えない（導きの目で探して掘っていく）。
 // 広間の四隅にチェスト（中身は最初に開けた時にサーバーが決める）、真ん中に紋章石の台、柱が4本、壁に紋章石の明かり
-const RUIN_Y = 14;   // 広間の床の高さ
-function ruinBlock(dx, y, dz, wx, wz) {   // 遺跡の一部なら置くブロック、違えば -1
-  const ax = Math.abs(dx), az = Math.abs(dz), F = RUIN_Y;
+function ruinBlock(dx, y, dz, wx, wz, F) {   // 遺跡の一部なら置くブロック、違えば -1。F: 広間の床の高さ
+  const ax = Math.abs(dx), az = Math.abs(dz);
   const brick = () => hash3(wx, y, wz, 900) < 0.18 ? RUIN_CRACKED : RUIN_BRICK;
-  if (ax <= 12 && az <= 12 && y >= 2 && y < F - 2) return DEEPSTONE;   // 広間の下は岩の土台（宙に浮かないように）
+  const r = ruinCore(ax, az, y, F, brick);
+  if (r >= 0) return r;
+  const tube = (ax <= 6 && az > 12 && az <= 25) || (az <= 6 && ax > 12 && ax <= 25);   // 通路のまわり
+  if ((ax <= 17 && az <= 17 && y >= 2 && y <= F + 16) || (tube && y >= F - 5 && y <= F + 9)) return DEEPSTONE;   // まわりの岩の殻
+  return -1;
+}
+function ruinCore(ax, az, y, F, brick) {
+  if (ax <= 12 && az <= 12 && y >= 2 && y < F - 2) return DEEPSTONE;   // 広間の下は岩の土台
   if (ax <= 12 && az <= 12 && y >= F - 2 && y <= F + 11) {
     if (ax <= 10 && az <= 10 && y >= F && y <= F + 9) {   // 広間の中
       if ((ax === 6 || ax === 7) && (az === 6 || az === 7)) return RUIN_PILLAR;
@@ -592,15 +601,17 @@ function ruinBlock(dx, y, dz, wx, wz) {   // 遺跡の一部なら置くブロ�
     return brick();
   }
   const along = az <= 2 ? ax : ax <= 2 ? az : 0, side = az <= 2 ? az : ax;
-  if (along > 12 && along <= 34 && y >= F - 1 && y <= F + 4) return side <= 1 && y >= F && y <= F + 3 ? AIR : brick();   // 通路
+  if (along > 12 && along <= 21 && y >= F - 1 && y <= F + 4) return side <= 1 && y >= F && y <= F + 3 && along <= 20 ? AIR : brick();   // 通路（先は行き止まり）
   return -1;
 }
 // 一番近い遺跡（周りの区画も見る）
-function nearestRuin(x, z) {
+function nearestRuin(x, z) {   // 周り 5x5 区画（だいたい 1000 ブロック以内）で一番近い遺跡。無ければ null
   const i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
   let best = null, bd = Infinity;
-  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-    const r = ruinOf((i + di) * RUIN_CELL + 1, (j + dj) * RUIN_CELL + 1), d = Math.hypot(r.x + 0.5 - x, r.z + 0.5 - z);
+  for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) {
+    const r = ruinAt(i + di, j + dj);
+    if (!r) continue;
+    const d = Math.hypot(r.x + 0.5 - x, r.z + 0.5 - z);
     if (d < bd) { bd = d; best = r; }
   }
   return best;
@@ -609,7 +620,7 @@ function genDeep(cx, cz) {
   const d = new Uint16Array(CS * CS * H), I = (x, y, z) => (y * CS + z) * CS + x;
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const wx = cx * CS + x, wz = cz * CS + z, room = Math.abs(wx - 8) <= 3 && Math.abs(wz - 8) <= 3;
-    const ru = ruinOf(wx, wz), nearRuin = Math.hypot(wx - ru.x, wz - ru.z) < 48;
+    const ru = ruinOf(wx, wz), nearRuin = !!ru && Math.hypot(wx - ru.x, wz - ru.z) < 48;
     for (let y = 0; y < H; y++) {
       let b = DEEPSTONE;
       if (y === 0 || y === H - 1) b = CORE;
@@ -619,10 +630,14 @@ function genDeep(cx, cz) {
       else if (deepAir(wx, y, wz)) b = y <= DEEP_SEA ? WATER : AIR;
       else {   // 鉱石: 灯晶石 > 黒鉄鉱 > 紅炎石（深い所だけ）> 虚晶石（遺跡の近くだけ）
         const r = hash3(wx, y, wz, 870);
-        if (nearRuin && r < 0.00012) b = VOID_ORE;
-        else if (y <= 14 && r > 0.4 && vnoise3(wx * 0.4, y * 0.4, wz * 0.4, 852) > 0.9) b = EMBER_ORE;
-        else if (r > 0.35 && vnoise3(wx * 0.35, y * 0.35, wz * 0.35, 851) > 0.9) b = DARKIRON_ORE;
-        else if (r > 0.3 && vnoise3(wx * 0.3, y * 0.3, wz * 0.3, 850) > 0.875) b = GLOW_ORE;
+        let ore = 0;
+        if (nearRuin && r < 0.00012) ore = VOID_ORE;
+        else if (y <= 14 && r > 0.4 && vnoise3(wx * 0.4, y * 0.4, wz * 0.4, 852) > 0.9) ore = EMBER_ORE;
+        else if (r > 0.35 && vnoise3(wx * 0.35, y * 0.35, wz * 0.35, 851) > 0.9) ore = DARKIRON_ORE;
+        else if (r > 0.3 && vnoise3(wx * 0.3, y * 0.3, wz * 0.3, 850) > 0.875) ore = GLOW_ORE;
+        // 黒鉄・紅炎・虚晶は地中に埋める（6面のどこかが空洞・水に面していたら、ただの深石にする）。灯晶石は明かりなので見えてよい
+        if (ore && ore !== GLOW_ORE && [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].some(([a, c, e]) => deepAir(wx + a, y + c, wz + e))) ore = 0;
+        if (ore) b = ore;
       }
       d[I(x, y, z)] = b;
     }
@@ -684,10 +699,10 @@ function genDeep(cx, cz) {
     }
   // 遺跡（最後に重ねるので、洞窟・水・キノコより優先）
   const ru = ruinOf(cx * CS + 8, cz * CS + 8);
-  if (Math.abs(cx * CS + 8 - ru.x) <= 34 + 8 && Math.abs(cz * CS + 8 - ru.z) <= 34 + 8)
+  if (ru && Math.abs(cx * CS + 8 - ru.x) <= 25 + 8 && Math.abs(cz * CS + 8 - ru.z) <= 25 + 8)
     for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
       const wx = cx * CS + x, wz = cz * CS + z;
-      for (let y = 2; y <= RUIN_Y + 11; y++) { const b = ruinBlock(wx - ru.x, y, wz - ru.z, wx, wz); if (b >= 0) d[I(x, y, z)] = b; }
+      for (let y = 2; y <= ru.y + 16; y++) { const b = ruinBlock(wx - ru.x, y, wz - ru.z, wx, wz, ru.y); if (b >= 0) d[I(x, y, z)] = b; }
     }
   return finishChunk(d, cx, cz);
 }
@@ -2017,11 +2032,13 @@ function useItem() {
   if (st && st.b === GUIDE_EYE) {   // 導きの目: 地底で使うと、一番近い遺跡の方へ飛んでいく。8割は落ちてきて拾える
     placeCd = 1;
     if (dim !== 1) { toast('ここでは、導きの目は何も示さない'); return; }
+    const r = nearestRuin(P.x, P.z);
+    if (!r) { toast('導きの目は何も感じ取れない（近くに遺跡が無い）'); return; }   // 減らさない
     if (--st.n <= 0) slots[sel] = null;
     refreshUI();
-    const r = nearestRuin(P.x, P.z), dx = r.x + 0.5 - P.x, dz = r.z + 0.5 - P.z, dist = Math.hypot(dx, dz) || 1;
+    const dx = r.x + 0.5 - P.x, dz = r.z + 0.5 - P.z, dist = Math.hypot(dx, dz) || 1;
     eyes.push({ x: P.x, y: eyeY(), z: P.z, y0: eyeY(), dx: dx / dist, dz: dz / dist, go: Math.min(dist, 14), t: 0 });
-    if (dist < 14) toast('遺跡はすぐそこだ');
+    if (dist < 16) toast('遺跡はすぐそこだ' + (r.y + 4 > P.y + 3 ? '（上の方）' : r.y + 4 < P.y - 3 ? '（下の方）' : ''));   // 遺跡は地中なので、近づいたら高さも教える
     return;
   }
   if (st && isBow(st.b)) return;   // 弓は updateInteract で引きを数える
@@ -2147,7 +2164,7 @@ function respawn() {
   return false;
 }
 // 防具: 着ている分だけダメージを減らし、各部位の耐久を1減らす（落下ダメージには効かない）
-function armorReduce(dmg) {
+function armorReduce(dmg, pierce = 0) {
   let def = 0;
   for (let i = 36; i < 40; i++) {
     const s = slots[i], a = s && ARMOR[s.b];
@@ -2157,7 +2174,7 @@ function armorReduce(dmg) {
   }
   if (!def) return dmg;
   refreshUI();
-  return Math.max(1, Math.round(dmg * (1 - def * 0.04)));
+  return Math.max(1, Math.round(dmg * (1 - def * (1 - pierce) * 0.04)));
 }
 // 他の人に見せる用: 4部位それぞれの素材ランク（0=なし）を並べた文字列。例 "2034"
 const eqCode = () => [36, 37, 38, 39].map(i => { const s = slots[i], a = s && ARMOR[s.b]; return a ? a.tier : 0; }).join('');
@@ -2594,8 +2611,8 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   '水: バケツで置くと水源になり、横に7マスまで流れ、下が空いていれば落ちる。水源を取ると引いていく。水源2つの間は水源になる（無限水源）。汲めるのは水源だけ。',
   '建材: ハーフ（横3つ）・階段（6個）・塀（2段）・柵・扉・跳ね上げ戸・柵の門・はしご・板ガラス・鉄格子。扉などは右クリックで開け閉め（何か持っていても開く。置きたい時はスニーク）。ハーフと階段の半段は歩くだけで登れる。',
   'かまど: 中身はかまどに残り、閉じても誰もいなくても焼け続ける。',
-  'おかかっぱ: 遺跡の大広間にいるボス。近いと殴り、離れると岩を投げる（溜めの間に横へよける）。倒すと広間の真ん中に虚空への門が開き、核を落とす。核で紅炎の大剣・噴火の槌・紅炎の弓・虚晶の刃・虚晶の杖・虚無の外套が作れる。',
-  '導きの目: 地底で右クリックすると、一番近い遺跡の方へ飛んでいく（2割で砕ける）。遺跡の四隅にはチェストがある。',
+  'おかかっぱ: 遺跡の大広間にいるボス。体力300。近いと殴り、離れると岩を投げる（溜めの間に横へよける）。攻撃は防具の効き目が半分になる。体力が半分を切ると速くなる。倒すと広間の真ん中に虚空への門が開き、核を落とす。核で紅炎の大剣・噴火の槌・紅炎の弓・虚晶の刃・虚晶の杖・虚無の外套が作れる。',
+  '導きの目: 地底で右クリックすると、一番近い遺跡の方へ飛んでいく（2割で砕ける）。遺跡は地中深くに埋まっていて数も少ないので、これが無いとまず見つからない。近づくと上か下かも教えてくれる。遺跡の四隅にはチェストがある。',
   '地底: 深石の地下世界。灯晶石（石のツルハシ）・黒鉄鉱（鉄）・紅炎石（ダイヤ、深い所）・虚晶石（黒鉄、遺跡の近く）が採れる。全身そろえると 紅炎=爆発ダメージ半分＋殴った相手が燃える、虚晶=落下ダメージなし＋敵に気づかれにくい。',
   '地底への門: 一番下の岩盤を爆薬で吹き飛ばすと、時々岩盤ブロックが手に入る。それを地面に 5×5 の輪（真ん中 3×3 は空ける。四隅は無くてよい）に並べ、真ん中で爆薬を爆発させると門が開く。門の上に少し立つと移動する。',
   '爆薬: 置いて右クリックで点火、3秒後に周りのブロックごと爆発する。火薬はタルボムから。ワープ玉（カスミが落とす）は右クリックで投げると、落ちた場所へ移動する。',
@@ -3077,7 +3094,7 @@ const NET = {
       mb.tx = x; mb.ty = y; mb.tz = z; mb.tyaw = yaw; mb.fuse = fz || 0;
     }
   },
-  boom(m) { boomFx(m.x, m.y, m.z, m.r); if (!m.fake) hurtByBoom(m.x, m.y, m.z, m.r, m.pw || 1); },   // fake: 門が開く時の見た目だけの爆発
+  boom(m) { boomFx(m.x, m.y, m.z, m.r); if (!m.fake) hurtByBoom(m.x, m.y, m.z, m.r, m.pw || 1, m.pi || 0); },   // fake: 門が開く時の見た目だけの爆発
   fuse(m) { fuses.push({ x: m.x, y: m.y, z: m.z, t: m.s, mine: false }); },
   mrm(m) { mobs.delete(m.id); },
   mown(m) { const mb = mobs.get(m.id); if (mb) { mb.owner = m.owner; mb.vy = 0; mb.dir = mb.yaw; } },
@@ -3093,7 +3110,7 @@ const NET = {
       if (MOBS[mb.kind].blink) { mb.angry = true; mb.blinkT = 1; blinkMob(mb, mb.x, mb.y, mb.z, 5, 9); }   // カスミ: 殴られると怒って、いったん遠くへ飛ぶ
     }
   },
-  hurt(m) { hurtMe(m.dmg, m.kx, m.kz, m.cause); },
+  hurt(m) { hurtMe(m.dmg, m.kx, m.kz, m.cause, m.pierce || 0); },
   arrow(m) { arrows.push({ x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, dmg: 0, mob: 0, kind: m.k || 0, mine: false, age: 0, stuck: 0 }); },   // 他の人・他の人が動かすモブの矢（見た目だけ）
   wantspawn(m) { pickSpawn(m.kind); },
   chat(m) { addChat(m.name, m.text); },
@@ -3299,7 +3316,7 @@ const MOBS = {
   chicken: { w: 0.22, h: 0.7, speed: 1.5 },
   sheep:   { w: 0.42, h: 1.1, speed: 1.5 },
   // 遺跡のボス。歩いて追ってきて、近いと殴り、離れると岩を投げる。重いのでほとんど吹き飛ばない
-  okakappa: { w: 0.95, h: 3.5, speed: 2.1, hostile: true, atk: 6, name: 'おかかっぱ', boss: true, maxHp: 150 },
+  okakappa: { w: 0.95, h: 3.5, speed: 2.1, hostile: true, atk: 10, name: 'おかかっぱ', boss: true, maxHp: 300, pierce: 0.5 },   // pierce: 防具の効き目を半分にする
 };
 const mobs = new Map();
 function addMob(m) {
@@ -3344,10 +3361,10 @@ function simMob(m, dt) {
       } else if (dist > 4.5 && dist < 30 && m.throwCd <= 0) {
         m.wind = 0.001; m.throwCd = m.hp < (K.maxHp / 2) ? 2.5 + Math.random() : 4 + Math.random();
       } else {
-        sp = best < 2.2 * 2.2 ? 0 : K.speed;
+        sp = best < 2.2 * 2.2 ? 0 : K.speed * (m.hp < K.maxHp / 2 ? 1.35 : 1);   // 体力が半分を切ると足も速くなる
         if (best < 2.9 * 2.9 && m.atkCd <= 0) {
-          m.atkCd = 1.5;
-          if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(K.atk, (P.x - m.x) / l * 7, (P.z - m.z) / l * 7, K.name); }
+          m.atkCd = m.hp < K.maxHp / 2 ? 1.1 : 1.5;
+          if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(K.atk, (P.x - m.x) / l * 7, (P.z - m.z) / l * 7, K.name, K.pierce); }
           else send({ t: 'mattack', id: m.id, target: tgt[0] });
         }
       }
@@ -3393,9 +3410,9 @@ function bossThrow(m, tgt) {
   const sx = m.x, sy = m.y + 3.6, sz = m.z, dx = tgt[1] - sx, dy = tgt[2] + 1 - sy, dz = tgt[3] - sz, l = Math.hypot(dx, dy, dz) || 1, v = 13;
   launchArrow(sx, sy, sz, dx / l * v, dy / l * v, dz / l * v, 0, m.id, 2);
 }
-function rockBoom(x, y, z) {   // 岩・紅炎の矢の爆発: ダメージだけで、ブロックは壊さない
-  boomFx(x, y, z, 2.5); hurtByBoom(x, y, z, 2.5, 0.5);
-  send({ t: 'boom', x, y, z, r: 2.5, pw: 0.5, nb: 1 });
+function rockBoom(x, y, z) {   // おかかっぱの岩の爆発: ダメージだけで、ブロックは壊さない（最大13、防具の効き目は半分）
+  boomFx(x, y, z, 2.5); hurtByBoom(x, y, z, 2.5, 0.8, 0.5);
+  send({ t: 'boom', x, y, z, r: 2.5, pw: 0.8, pi: 0.5, nb: 1 });
 }
 // ボスの体力バー: 40ブロック以内におかかっぱがいれば、画面の上に名前と体力を出す
 let bossBar = null;
@@ -3484,7 +3501,7 @@ function attack() {
   return true;
 }
 // 自分がダメージを受けた（他プレイヤーかゾンビから）
-function hurtMe(dmg, kx, kz, cause) {
+function hurtMe(dmg, kx, kz, cause, pierce = 0) {   // pierce: 防具の効き目を減らす割合
   if (P.inv > 0) return;
   wake();
   const sh = blockingSlot(), ld = lookDir();
@@ -3497,7 +3514,7 @@ function hurtMe(dmg, kx, kz, cause) {
     for (let k = 0; k < 8; k++) parts.push({ x: P.x, y: P.y + 1, z: P.z, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: (Math.random() - 0.5) * 3, life: 0.5, col: [0.72, 0.5, 0.98] });
     P.inv = 0.3; return;
   }
-  dmg = armorReduce(dmg);
+  dmg = armorReduce(dmg, pierce);
   P.inv = 0.3; P.kbx = kx; P.kbz = kz;   // 無敵時間は攻撃の間隔（0.35秒）より短く。長いと連打の半分が消える
   if (P.ground && (kx || kz)) P.vy = 5;   // 燃えている時のダメージ（ノックバック無し）では跳ねない
   damage(dmg, cause);
@@ -3808,11 +3825,11 @@ function boomFx(x, y, z, r) {
     parts.push({ x, y, z, vx: Math.cos(a) * h * s, vy: u * s + 2, vz: Math.sin(a) * h * s, life: 0.4 + Math.random() * 0.5, col: cols[i % 4] });
   }
 }
-function hurtByBoom(x, y, z, r, pw = 1) {   // pw: 強さの倍率（おかかっぱの岩は0.5）
+function hurtByBoom(x, y, z, r, pw = 1, pierce = 0) {   // pw: 強さの倍率、pierce: 防具を無視する割合（おかかっぱの岩は 0.8 と 0.5）
   const dx = P.x - x, dy = P.y + 0.9 - y, dz = P.z - z, d = Math.hypot(dx, dy, dz), R = r * 1.8;
   if (d >= R) return;
   const l = Math.hypot(dx, dz) || 1, k = 9 * (1 - d / R);
-  hurtMe(Math.ceil(16 * pw * (1 - d / R) / (fullSet(6) ? 2 : 1)), dx / l * k, dz / l * k, '爆発');   // 紅炎の全身: 爆発ダメージ半分
+  hurtMe(Math.ceil(16 * pw * (1 - d / R) / (fullSet(6) ? 2 : 1)), dx / l * k, dz / l * k, '爆発', pierce);   // 紅炎の全身: 爆発ダメージ半分
 }
 function explode(x, y, z, r, mobId) {
   const l = [], seen = new Set(), chain = [], f = Math.floor;
