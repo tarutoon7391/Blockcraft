@@ -28,8 +28,8 @@ for (let b = 61; b <= MAX_BLOCK; b++) ITEM_IDS.add(b);   // 地底のブロッ�
 for (let i = 150; i <= 160; i++) ITEM_IDS.add(i);   // 154=おかかっぱの核 155〜160=特別装備        // 灯晶・黒鉄インゴット・紅炎・虚晶
 for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 8; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
-const validBlock = b => Number.isInteger(b) && ((b >= 0 && b <= MAX_BLOCK && b !== CORE) || (b >= 1000 && b < 1800));   // 1000〜: 階段・ハーフ・扉などの形のあるブロック   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
-const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && (b < 24 || b >= 1000)) || ITEM_IDS.has(b);
+const validBlock = b => Number.isInteger(b) && ((b >= 0 && b <= MAX_BLOCK && b !== CORE) || (b >= 1000 && b < 1809));   // 1801〜1808: 流れる水   // 1000〜: 階段・ハーフ・扉などの形のあるブロック   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
+const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && (b < 24 || (b >= 1000 && b < 1800))) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
 // ---- 地底の遺跡（ブラウザの ruinOf / ruinBlock と同じ計算） ----
 // 遺跡のチェストは地形の一部なので edits に無い。場所を計算で見分けて、最初に開けた時に中身を入れる
@@ -521,7 +521,7 @@ const handlers = {
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
   hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
-  dim: [1, 3], sets: [6, 20], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], boom: [4, 12], fuse: [8, 20], copen: [4, 8], cput: [30, 60], cclose: [4, 8], fopen: [4, 8], fput: [30, 60], fclose: [4, 8],
+  dim: [1, 3], sets: [10, 30], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], boom: [4, 12], fuse: [8, 20], copen: [4, 8], cput: [30, 60], cclose: [4, 8], fopen: [4, 8], fput: [30, 60], fclose: [4, 8],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）

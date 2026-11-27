@@ -349,6 +349,10 @@ TOOLS[VOID_BLADE] = { type: 'sword', tier: 7, speed: 1, dur: 1600, lvl: 0, dmg: 
 TOOLS[VOID_STAFF] = { type: 'staff', tier: 7, speed: 1, dur: 600, lvl: 0, dmg: 1 };        // 右クリックで光の弾
 ARMOR[VOID_CLOAK] = { part: 1, tier: 7, def: 9, dur: 16 * 30 };                            // 胴。2割で攻撃を無効にする
 const isBow = b => b === BOW || b === EMBER_BOW;
+// 流れる水（第9弾）: 1800 + 段階。1〜7=流れている水（数字が大きいほど水源から遠くて浅い）、8=落ちている水。WATER(5) は水源
+const FLOW = 1800, FALL = FLOW + 8;
+const isWater = b => b === WATER || (b > FLOW && b <= FALL);
+const waterStr = b => b === WATER || b === FALL ? 8 : b > FLOW && b < FALL ? 8 - (b - FLOW) : 0;   // 水の強さ（水源・落ちる水=8、遠いほど小さい）
 // ---- 建材（第8弾） ----
 // 飾りブロック（普通の立方体）
 Object.assign(NAME, { [SMOOTH_STONE]: '滑らかな石', [CRACKED_BRICK]: 'ひび割れた石レンガ', [MOSSY_BRICK]: '苔むした石レンガ', [MOSSY_COBBLE]: '苔むした丸石',
@@ -833,7 +837,7 @@ function batch(fn) {
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
 const opaque = b => b < 1000 && b !== AIR && b !== GLOW_GLASS && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM && b !== VOID_PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
-const solid = b => opaque(b) || isGlassy(b) || b === PORTAL || b === VOID_PORTAL || (b >= 1000 && !isLadder(b));   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
+const solid = b => opaque(b) || isGlassy(b) || b === PORTAL || b === VOID_PORTAL || (b >= 1000 && b < FLOW && !isLadder(b));   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -1040,7 +1044,8 @@ const WHITE = [1, 1, 1];
   const avg = t => { const a = TILE_PX[t]; let r = 0, g = 0, b = 0; for (let i = 0; i < 1024; i += 4) { r += a[i]; g += a[i + 1]; b += a[i + 2]; } return [r / 65280, g / 65280, b / 65280]; };
   for (const k in TILE) if (+k !== GRASS && +k !== BED) COL[k] = TILE[k].map(avg);
 }
-for (const id in NAME) if (+id >= 1000) COL[id] = COL[buildMat(+id)];   // 形のあるブロックの色は素材と同じ（落ちているアイテムの小さい立方体用）
+for (const id in NAME) if (+id >= 1000) COL[id] = COL[buildMat(+id)];
+for (let b = FLOW + 1; b <= FALL; b++) { NAME[b] = '水'; COL[b] = COL[WATER]; HARD[b] = Infinity; }   // 形のあるブロックの色は素材と同じ（落ちているアイテムの小さい立方体用）
 
 // ---------- メッシュ生成 ----------
 const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
@@ -1146,6 +1151,7 @@ function boxMesh(V, I, x0, y0, z0, x1, y1, z1, ct, cs, lt, tl, ti = 1) {   // ti
     I.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
 }
+const waterH = (b, x, y, z) => isWater(getBlock(x, y + 1, z)) ? 1 : b === WATER || b === FALL ? 0.88 : Math.max(0.12, waterStr(b) / 8 * 0.88);
 function buildMesh(cx, cz) {
   const d = getChunk(cx, cz);
   const ov = [], oi = [], wv = [], wi = [];
@@ -1177,7 +1183,7 @@ function buildMesh(cx, cz) {
       }
       continue;
     }
-    if (b >= 1000) {   // 形のあるブロック: 中の箱を素材の模様で描く（板ガラス・鉄格子は半透明の組）
+    if (b >= 1000 && b < FLOW) {   // 形のあるブロック: 中の箱を素材の模様で描く（板ガラス・鉄格子は半透明の組）
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
       const X = ox + x, Z = oz + z, see = b === PANE || b === BARS;
       const tiles = isDoor(b) ? TILE[(b < IRON_DOOR ? DOOR : IRON_DOOR) + (b & 1)] : TILE[isTrap(b) ? TRAPDOOR : isLadder(b) ? LADDER : b === BARS ? BARS : buildMat(b)];
@@ -1189,12 +1195,13 @@ function buildMesh(cx, cz) {
       plantMesh(ov, oi, b, ox + x, y, oz + z, d.bio[z * CS + x], Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1), tl);
       continue;
     }
-    const isG = isGlassy(b), isW = b === WATER || isG, bi = d.bio[z * CS + x];   // ガラスも水と同じ半透明の組に入れる
+    const isG = isGlassy(b), isW = isWater(b) || isG, bi = d.bio[z * CS + x];
+    const wTop = isWater(b) ? (isWater(getBlock(ox + x, y + 1, oz + z)) ? 1 : b === WATER || b === FALL ? 0.88 : Math.max(0.12, waterStr(b) / 8 * 0.88)) : 1;   // 水面の高さ   // ガラスも水と同じ半透明の組に入れる
     for (let f = 0; f < 6; f++) {
       const D = DIRS[f], nx = x + D[0], ny = y + D[1], nz = z + D[2];
       if (ny < 0) continue;
       const nb = ny >= H ? AIR : (nx >= 0 && nx < CS && nz >= 0 && nz < CS) ? d[(ny * CS + nz) * CS + nx] : getBlock(ox + nx, ny, oz + nz);
-      if (isG ? (opaque(nb) || nb === b) : isW ? nb !== AIR : opaque(nb)) continue;
+      if (isG ? (opaque(nb) || nb === b) : isW ? (opaque(nb) || (isWater(nb) && (f === 2 || f === 3 || waterH(nb, ox + nx, ny, oz + nz) >= wTop))) : opaque(nb)) continue;   // 水: 隣の水の方が低い時だけ横の面を描く
       const ti = TILE[b] ? TILE[b][FCI[f]] : 1, cs = CORNERS[f];   // この面の模様番号（1 = 模様なし）
       // 模様がある面は、頂点の色を明るさだけにする（草の上面だけはバイオームの草色を掛ける）
       const c3 = ti > 1 ? (b === GRASS && f === 2 ? GTINT[bi][0] : WHITE) : colOf(b, FCI[f], bi);
@@ -1226,7 +1233,7 @@ function buildMesh(cx, cz) {
         }
         ao[k] = a;
         const l = SHADE[f] * (0.5 + a / 6) * lt;
-        const vy = y + c[1] - (b === WATER && c[1] && f !== 3 && getBlock(ox + x, y + 1, oz + z) !== WATER ? 0.12 : 0);
+        const vy = y + (isWater(b) ? c[1] * wTop : c[1]);
         V.push(ox + x + c[0], vy, oz + z + c[2], c3[0] * l, c3[1] * l, c3[2] * l, D[0] * nk, D[1] * nk, D[2] * nk);
       }
       if (ao[0] + ao[2] < ao[1] + ao[3]) I.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
@@ -1718,7 +1725,7 @@ function lookDir() {
   return [-Math.sin(P.yaw) * cp, Math.sin(P.pitch), -Math.cos(P.yaw) * cp];
 }
 function update(dt) {
-  inWater = getBlock(Math.floor(P.x), Math.floor(P.y + 0.4), Math.floor(P.z)) === WATER;
+  inWater = isWater(getBlock(Math.floor(P.x), Math.floor(P.y + 0.4), Math.floor(P.z)));
   const on = active();
   let ix = on ? (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0) + joy.x : 0;
   let iz = on ? (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0) + joy.y : 0;
@@ -1744,6 +1751,15 @@ function update(dt) {
   if (isLadder(getBlock(fx, Math.floor(P.y + 0.1), fz)) || isLadder(getBlock(fx, Math.floor(P.y + 1), fz))) {
     P.land = 0;
     P.vy = len > 0.1 || jump ? 3.2 : P.sneak ? 0 : Math.max(P.vy, -2.5);
+  }
+  if (inWater) {   // 流れる水: 浅い方へ押し流される
+    const fy = Math.floor(P.y + 0.4), here = getBlock(fx, fy, fz);
+    if (here !== WATER) {
+      const s0 = waterStr(here); let px = 0, pz = 0;
+      NB4.forEach(([dx, dz]) => { const nb = getBlock(fx + dx, fy, fz + dz); if (isWater(nb)) { const k = s0 - waterStr(nb); px += dx * k; pz += dz * k; } else if (!solid(nb)) { px += dx * s0; pz += dz * s0; } });
+      const l = Math.hypot(px, pz);
+      if (l > 0) { P.vx += px / l * 2.2; P.vz += pz / l * 2.2; }
+    }
   }
   P.onG = P.ground;
   P.ground = false; P.blocked = false;
@@ -1805,11 +1821,11 @@ function raycast(maxD, water) {   // water=true なら水面にも当たる（�
   let px = x, py = y, pz = z, t = 0;
   while (t <= maxD) {
     const b = getBlock(x, y, z);
-    if (b >= 1000) {   // 形のあるブロック: 中の箱に当たった時だけ（ハーフの上の空いた所などは素通り）
+    if (b >= 1000 && b < FLOW) {   // 形のあるブロック: 中の箱に当たった時だけ（ハーフの上の空いた所などは素通り）
       let best = Infinity;
       for (const q of shapeBoxes(b, x, y, z, false)) { const h = rayBox([ex, ey, ez], [dx, dy, dz], x + q[0], y + q[1], z + q[2], x + q[3], y + q[4], z + q[5]); if (h !== null && h < best) best = h; }
       if (best <= maxD) return { x, y, z, px, py, pz, b, t: best };
-    } else if ((b !== AIR && b !== WATER) || (water && b === WATER)) return { x, y, z, px, py, pz, b, t };
+    } else if ((b !== AIR && !isWater(b)) || (water && isWater(b))) return { x, y, z, px, py, pz, b, t };
     px = x; py = y; pz = z;
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; }
@@ -1920,7 +1936,7 @@ function placeBuild(st) {
   const upper = ny === -1 || (ny === 0 && fy > 0.5);   // 天井側に付けるか（上ハーフ・逆さ階段・上側の跳ね上げ戸）
   const f = Math.abs(d[0]) > Math.abs(d[2]) ? (d[0] > 0 ? 1 : 3) : (d[2] > 0 ? 2 : 0);   // 向いている方向
   let x = target.px, y = target.py, z = target.pz, b = st.b;
-  const free = c => c === AIR || c === WATER || isPlant(c);
+  const free = c => c === AIR || isWater(c) || isPlant(c);
   const done = () => { if (--st.n <= 0) slots[sel] = null; refreshUI(); };
   if (isShape(b)) {
     const m = (b - 1000) >> 4, v = shapeForm(b), same = c => isShape(c) && ((c - 1000) >> 4) === m && shapeForm(c) < 2;
@@ -2033,7 +2049,7 @@ function useItem() {
   const { x, y, z } = target;
   if (st && TOOLS[st.b] && TOOLS[st.b].type === 'hoe' && (target.b === GRASS || target.b === DIRT)) {
     const up = getBlock(x, y + 1, z);
-    if (solid(up) || up === WATER || up === BED) return;
+    if (solid(up) || isWater(up) || up === BED) return;
     if (onTop(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
     netSet(x, y, z, FARMLAND, target.b);
     useTool();
@@ -2151,11 +2167,11 @@ function blockingSlot() {
   for (const i of [sel, 40, 41]) if (slots[i] && slots[i].b === SHIELD) return i;
   return -1;
 }
-// バケツ: 水を汲む／置く。水は流れないので、置いた1マスだけが水になる
+// バケツ: 水を汲む（水源だけ）／置く（水源になって周りへ流れる）
 function useBucket(st) {
   if (st.b === BUCKET) {
     const w = raycast(REACH, true);
-    if (!w || w.b !== WATER) return false;
+    if (!w || w.b !== WATER) { if (w && isWater(w.b)) toast('流れている水は汲めない（水源だけ）'); return !!w && isWater(w.b); }
     netSet(w.x, w.y, w.z, AIR, WATER);
     slots[sel] = { b: WATER_BUCKET, n: 1 };
   } else {
@@ -2223,7 +2239,7 @@ function updateItems(dt) {
     if (ddx * ddx + ddz * ddz > RD * CS * RD * CS) continue;
     const here = getBlock(fl(e.x), fl(e.y + 0.05), fl(e.z));
     if (solid(here)) { e.y = fl(e.y + 0.05) + 1; e.vy = 0; }   // 埋まったら上に押し出す
-    else if (here === WATER) { e.vy = Math.min(e.vy + 12 * dt, 1.2); e.vx *= 0.9; e.vz *= 0.9; }
+    else if (isWater(here)) { e.vy = Math.min(e.vy + 12 * dt, 1.2); e.vx *= 0.9; e.vz *= 0.9; }
     else e.vy = Math.max(e.vy - 22 * dt, -9);
     const nx = e.x + e.vx * dt;
     if (solid(getBlock(fl(nx), fl(e.y + 0.05), fl(e.z)))) e.vx = 0; else e.x = nx;
@@ -2575,6 +2591,7 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  '水: バケツで置くと水源になり、横に7マスまで流れ、下が空いていれば落ちる。水源を取ると引いていく。水源2つの間は水源になる（無限水源）。汲めるのは水源だけ。',
   '建材: ハーフ（横3つ）・階段（6個）・塀（2段）・柵・扉・跳ね上げ戸・柵の門・はしご・板ガラス・鉄格子。扉などは右クリックで開け閉め（何か持っていても開く。置きたい時はスニーク）。ハーフと階段の半段は歩くだけで登れる。',
   'かまど: 中身はかまどに残り、閉じても誰もいなくても焼け続ける。',
   'おかかっぱ: 遺跡の大広間にいるボス。近いと殴り、離れると岩を投げる（溜めの間に横へよける）。倒すと広間の真ん中に虚空への門が開き、核を落とす。核で紅炎の大剣・噴火の槌・紅炎の弓・虚晶の刃・虚晶の杖・虚無の外套が作れる。',
@@ -2751,7 +2768,11 @@ function updateFurnace(dt) {
 
 // ---------- 入力 ----------
 const startEl = $('start');
-function lock() { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+// マウスを隠して視点操作にする。ブラウザに断られた時（Esc で閉じた直後など）は wantLock を残しておき、
+// 次にキーを押すかクリックした時にもう一度頼む（その最初のクリックでは殴ったり置いたりしない）
+let wantLock = false;
+function lock() { wantLock = true; try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) {} }
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement === canvas) wantLock = false; });
 const locked = () => document.pointerLockElement === canvas;
 const nameIn = $('name'), goBtn = $('go');
 try { nameIn.value = localStorage.getItem('blockcraft-name') || ''; } catch (e) {}
@@ -2765,7 +2786,7 @@ function enter() {
 goBtn.addEventListener('click', enter);
 nameIn.addEventListener('keydown', e => { if (e.code === 'Enter' && !e.isComposing) enter(); });
 canvas.addEventListener('mousedown', e => {
-  if (!locked()) lock();
+  if (!locked()) { const resume = wantLock && active() && 'pointerLockElement' in document; lock(); if (resume) return; }   // 視点操作に戻すだけのクリックでは何もしない
   if (e.button === 0) { mouse.l = true; noBreak = active() && attack(); }   // 何かを殴ったら、離すまでブロックは壊さない
   if (e.button === 2) { mouse.r = true; placeCd = Math.min(placeCd, 0); }
 });
@@ -2794,6 +2815,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Space' || e.code === 'Tab' || e.code.startsWith('Arrow')) e.preventDefault();
   if (e.repeat) return;
   if (sleeping) { wake(); return; }
+  if (wantLock && !invOpen && e.code !== 'Escape' && document.pointerLockElement !== canvas) lock();   // 画面を閉じた後、キーを押したら視点操作に戻る
   if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !invOpen) { e.preventDefault(); openChat(); return; }
   if (e.code === 'KeyE') { invOpen ? closeInv() : openInv(); return; }
   if (e.code === 'Escape' && invOpen) { closeInv(); return; }
@@ -2899,7 +2921,7 @@ let pendingPos = null;
 function enterDim(m, pos) {
   for (const ms of meshes.values()) freeMesh(ms);
   meshes.clear(); chunks.clear(); edits.clear(); lastKey = -1;
-  items.length = 0; mobs.clear(); arrows.length = 0; fuses.length = 0; parts.length = 0;
+  items.length = 0; mobs.clear(); arrows.length = 0; fuses.length = 0; parts.length = 0; waterQ.clear();
   if (invOpen) closeInv();
   wake(true);
   dim = m.dim; seed = (worldSeed + dim * 7919) | 0;
@@ -2924,13 +2946,61 @@ function sendChat(text) {
   if (dim === 0) P.back = { x: P.x, y: P.y, z: P.z };   // 地上を離れる時、戻る場所を覚えておく
   send({ t: 'dim', d: +mm[1] });
 }
+// ---------- 水の流れ（第9弾） ----------
+// マイクラと同じ考え方: 水源から横に7マスまで広がり、下が空いていれば落ちる。水源が無くなると引いていく。
+// 隣に水源が2つあって下が地面か水源なら、そこも水源になる（無限水源）。
+// 計算するのは「近くのブロックを変えた本人のブラウザ」だけ。結果は sets で全員に配る（サーバーは地形を知らないため）
+const waterQ = new Set();   // 次に見直すマス "x,y,z"
+let waterT = 0;
+const canFlood = b => b === AIR || onTop(b) || isTorch(b);   // 水が流れ込める（植物・松明は流されて落ちる）
+function wakeWater(x, y, z) {   // (x,y,z) が変わった: 自分と周りに水があれば見直す
+  const c = [[0, 0, 0], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  if (!c.some(([a, b2, e]) => isWater(getBlock(x + a, y + b2, z + e)))) return;
+  for (const [a, b2, e] of c) if (y + b2 >= 1 && y + b2 < H) waterQ.add((x + a) + ',' + (y + b2) + ',' + (z + e));
+}
+// 水が横へ広がれるのは、下が地面の時だけ（落ちている途中や、水の上の水は横に広がらない）
+const holds = (x, y, z) => { const d = getBlock(x, y - 1, z); return !canFlood(d) && !(isWater(d) && d !== WATER); };
+function waterNext(x, y, z, b) {   // このマスの次の状態
+  if (b === WATER) return WATER;
+  if (isWater(getBlock(x, y + 1, z))) return FALL;
+  let best = 0, src = 0;
+  for (const [dx, dz] of NB4) {
+    const nb = getBlock(x + dx, y, z + dz);
+    if (!isWater(nb)) continue;
+    if (nb === WATER) src++;
+    if (holds(x + dx, y, z + dz)) best = Math.max(best, waterStr(nb) - 1);
+  }
+  const below = getBlock(x, y - 1, z);
+  if (src >= 2 && (below === WATER || !canFlood(below) && !isWater(below))) return WATER;   // 無限水源
+  return best >= 1 ? FLOW + (8 - best) : AIR;
+}
+function updateWater(dt) {
+  waterT += dt;
+  if (waterT < 0.25 || !waterQ.size) return;   // 0.25秒ごと（マイクラの水と同じ速さ）
+  waterT = 0;
+  const list = [...waterQ].slice(0, 300), l = [];
+  for (const k of list) waterQ.delete(k);
+  for (const k of list) {
+    const [x, y, z] = k.split(',').map(Number);
+    if (Math.abs(x - P.x) > 160 || Math.abs(z - P.z) > 160) continue;   // 遠すぎる所は止める
+    const b = getBlock(x, y, z);
+    if (!isWater(b) && !canFlood(b)) continue;
+    const nb = waterNext(x, y, z, b);
+    if (nb === b || (nb === AIR && !isWater(b))) continue;
+    if (b !== AIR && !isWater(b)) netSet(x, y, z, nb, b, dropsOf(b, null));   // 流された植物・松明は落ちる
+    else l.push([x, y, z, nb, b]);
+  }
+  if (l.length) netSets(l);
+}
 function netSet(x, y, z, b, was, drop) {
   setBlock(x, y, z, b);
+  wakeWater(x, y, z);
   send({ t: 'set', x, y, z, b, was, drop });
 }
 // まとめて変える版（木が育つ時など）。l は [x, y, z, 新しいブロック, 元のブロック] の並び
 function netSets(l) {
   batch(() => { for (const [x, y, z, b] of l) setBlock(x, y, z, b); });
+  for (const [x, y, z] of l) wakeWater(x, y, z);
   send({ t: 'sets', l });
 }
 function addOther(p) {
@@ -3128,7 +3198,7 @@ function loadLocal() {
   // 空中で保存されていたら（飛行があった頃のデータ・落下中に切れた時）、真下の地面に降ろす。
   // そのまま再開すると入り直した瞬間に墜落して落下ダメージを受けるため
   let gy = Math.floor(P.y) - 1;
-  const stand = b => solid(b) || b === WATER;   // 海の上なら海底ではなく水面に降ろす
+  const stand = b => solid(b) || isWater(b);   // 海の上なら海底ではなく水面に降ろす
   while (gy > 0 && !stand(getBlock(Math.floor(P.x), gy, Math.floor(P.z)))) gy--;
   if (P.y - (gy + 1) >= 3) { P.y = gy + 1; P.vy = 0; }
 }
@@ -3308,7 +3378,7 @@ function simMob(m, dt) {
     if (m.flee > 0) { m.flee -= dt; sp = K.speed * 2.2; } else if (m.moving) sp = K.speed * 0.6;
   }
   m.yaw = m.dir;
-  const f = Math.floor, inW = getBlock(f(m.x), f(m.y + 0.3), f(m.z)) === WATER;
+  const f = Math.floor, inW = isWater(getBlock(f(m.x), f(m.y + 0.3), f(m.z)));
   const dec = Math.exp(-6 * dt); m.kbx *= dec; m.kbz *= dec;
   const vx = -Math.sin(m.dir) * sp + m.kbx, vz = -Math.cos(m.dir) * sp + m.kbz;
   m.vy = inW ? 1.5 : Math.max(m.vy - 26 * dt, -30);
@@ -3539,7 +3609,7 @@ function pickSpawn(kind) {
     let y = H - 1;
     while (y > 1 && !solid(getBlock(x, y, z))) y--;
     const g = getBlock(x, y, z);
-    if (y + 3 >= H || getBlock(x, y + 1, z) === WATER) continue;
+    if (y + 3 >= H || isWater(getBlock(x, y + 1, z))) continue;
     if (MOBS[kind].hostile ? (g === LEAF || g === PINELEAF || g === CACTUS || g === ICE) : (g !== GRASS && g !== SNOWGRASS)) continue;   // 動物は草の上だけ
     if (MOBS[kind].hostile) {   // 湧きつぶし: 松明の光が少しでも届く所にはゾンビは湧かない
       const TL = torchLight(x >> 4, z >> 4);
@@ -3749,7 +3819,7 @@ function explode(x, y, z, r, mobId) {
   for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.hypot(dx, dy, dz) > r - Math.random() * 0.8) continue;   // ふちは少しガタつかせる
     const bx = f(x) + dx, by = f(y) + dy, bz = f(z) + dz, b = getBlock(bx, by, bz);
-    if (by < 1 || by >= H || b === AIR || b === WATER || b === CORE || b === VOID_PORTAL) continue;
+    if (by < 1 || by >= H || b === AIR || isWater(b) || b === CORE || b === VOID_PORTAL) continue;
     if (b === BEDROCK) {   // 岩盤: 10% で割れて、岩盤ブロックを落とす（それ以外はびくともしない）
       if (Math.random() < 0.1) netSet(bx, by, bz, AIR, BEDROCK, [BEDROCK]);
       continue;
@@ -3790,7 +3860,7 @@ function blinkMob(m, cx, cy, cz, rmin, rmax) {
     const a = Math.random() * Math.PI * 2, r = rmin + Math.random() * (rmax - rmin), x = f(cx + Math.cos(a) * r) + 0.5, z = f(cz + Math.sin(a) * r) + 0.5;
     let y = Math.min(H - 3, f(cy) + 3);
     while (y > 1 && !solid(getBlock(f(x), y - 1, f(z)))) y--;
-    if (boxHit(x, y, z, K.w, K.h) || getBlock(f(x), y, f(z)) === WATER) continue;
+    if (boxHit(x, y, z, K.w, K.h) || isWater(getBlock(f(x), y, f(z)))) continue;
     m.x = x; m.y = y; m.z = z; m.vy = 0;
     return true;
   }
@@ -3935,7 +4005,7 @@ function render() {
   gl.disable(gl.CULL_FACE);
   for (const m of meshes.values()) if (m.wa) { gl.bindVertexArray(m.wa.vao); gl.drawElements(gl.TRIANGLES, m.wa.n, gl.UNSIGNED_INT, 0); }
   gl.depthMask(true); gl.bindVertexArray(null);
-  waterEl.style.opacity = getBlock(Math.floor(P.x), Math.floor(ey), Math.floor(P.z)) === WATER ? 0.45 : 0;
+  waterEl.style.opacity = isWater(getBlock(Math.floor(P.x), Math.floor(ey), Math.floor(P.z))) ? 0.45 : 0;
 }
 function placeName() {
   if (dim) return DIMS[dim].name;
@@ -3949,7 +4019,7 @@ let last = 0, fps = 60, hudT = 0;
 function frame(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.1); last = t;
   tod = (tod + dt / DAYLEN) % 1;
-  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); updateArrows(dt); updateFx(dt); updateGate(dt); netTick(dt); loadChunks(); render(); updateTags();
+  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); updateArrows(dt); updateFx(dt); updateGate(dt); updateWater(dt); netTick(dt); loadChunks(); render(); updateTags();
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
