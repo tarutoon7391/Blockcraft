@@ -225,7 +225,7 @@ const SMELT = { [IRON_ORE]: IRON_INGOT, [GOLD_ORE]: GOLD_INGOT, [COBBLE]: STONE,
   [RAW_PORK]: COOKED_PORK, [RAW_BEEF]: COOKED_BEEF, [RAW_CHICKEN]: COOKED_CHICKEN };
 const FUEL = { [COAL]: 8, [LOG]: 1.5, [PLANKS]: 1.5, [STICK]: 0.5 };
 // 松明と木炭。松明は 29=床に立てた物、30〜33=壁に付けた物（壁がある向きが TORCH_WALL の順）。すり抜けて、周りを照らす
-const TORCH = 29, CHARCOAL = 108, TORCH_R = 8;   // TORCH_R: 光が届く歩数（壁の向こうには回り込んだ分しか届かない）
+const TORCH = 29, CHARCOAL = 108, TORCH_R = 8, TORCH_GAIN = 2.5;   // TORCH_GAIN: 松明の明るさの倍率（1 を超えた分は頭打ち）   // TORCH_R: 光が届く歩数（壁の向こうには回り込んだ分しか届かない）
 const isTorch = b => b >= TORCH && b <= TORCH + 4;
 const TORCH_WALL = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 for (let b = TORCH; b <= TORCH + 4; b++) { HARD[b] = 0.05; NAME[b] = '松明'; COL[b] = COL[PLANKS]; }
@@ -697,7 +697,7 @@ function torchLight(cx, cz) {
   }
   if (!L) return null;
   // チャンク内の座標(-R〜CS+R-1)で引けるようにして返す。値は 0〜1 の明るさ
-  return (lx, y, lz) => y < 0 || y >= H ? 0 : Math.pow(L[(y * W + lz + R) * W + lx + R] / R, 1.2);
+  return (lx, y, lz) => y < 0 || y >= H ? 0 : Math.min(1, TORCH_GAIN * Math.pow(L[(y * W + lz + R) * W + lx + R] / R, 1.2));
 }
 // 松明の見た目: 細い棒の先に炎。壁の松明は壁際から斜めに生える。自分自身は光の強さ1（夜でも明るい）
 function torchMesh(V, I, b, wx, y, wz) {
