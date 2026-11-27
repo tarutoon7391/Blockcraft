@@ -151,14 +151,18 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   GLASS = 41, CLAY = 42, BRICK = 43, SAPLING = 44,
   CHEST = 45, CAKE0 = 46, CAKE3 = 49,              // ケーキは 46〜49（食べるたびに1つ進む。46 が丸ごと）
   CARROT0 = 50, CARROT3 = 53, POTATO0 = 54, POTATO3 = 57, BOMB = 58,
-  CORE = 59, PORTAL = 60;   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
+  CORE = 59, PORTAL = 60,
+  // 地底のブロック
+  DEEPSTONE = 61, DEEP_BRICK = 62, GLOWMOSS = 63, MYCEL = 64, GLOWSHROOM = 65, MUSH_STEM = 66, MUSH_CAP = 67,
+  GLOW_ORE = 68, DARKIRON_ORE = 69, EMBER_ORE = 70, VOID_ORE = 71, LAMP = 72;   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
   CLOCK = 130, SHEARS = 131, BUCKET = 132, WATER_BUCKET = 133, APPLE = 134, GOLDEN_APPLE = 135, SHIELD = 136,
   EGG = 137, CARROT = 138, POTATO = 139, BAKED_POTATO = 140,
   STRING = 141, FEATHER = 142, BONE = 143, BONE_MEAL = 144, ARROW = 145, BOW = 146,
-  GUNPOWDER = 147, WARP_ORB = 148, GUIDE_EYE = 149;   // 防具は 300 番台
+  GUNPOWDER = 147, WARP_ORB = 148, GUIDE_EYE = 149,
+  GLOW_DUST = 150, DARK_INGOT = 151, EMBER = 152, VOID_GEM = 153;   // 地底の素材   // 防具は 300 番台
 // ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
@@ -188,6 +192,7 @@ HARD[COBBLE] = 3.0; HARD[PLANKS] = 2.0; HARD[TABLE] = 2.5; HARD[COAL_ORE] = 4.0;
 HARD[GOLD_ORE] = 4.5; HARD[DIAMOND_ORE] = 5.0; HARD[FURNACE] = 3.5; HARD[FARMLAND] = 0.8;
 for (let b = TALLGRASS; b <= WHEAT3; b++) HARD[b] = 0.05;
 const isPlant = b => (b >= TALLGRASS && b <= WHEAT3) || b === SAPLING || (b >= CARROT0 && b <= POTATO3);
+const onTop = b => isPlant(b) || b === 65;   // 下のブロックが無くなると一緒に壊れる物（植物・光るキノコ）
 const isCake = b => b >= CAKE0 && b <= CAKE3;
 Object.assign(NAME, { [COBBLE]: '丸石', [PLANKS]: '板材', [TABLE]: '作業台', [COAL_ORE]: '石炭鉱石', [IRON_ORE]: '鉄鉱石',
   [GOLD_ORE]: '金鉱石', [DIAMOND_ORE]: 'ダイヤ鉱石', [FURNACE]: 'かまど', [FARMLAND]: '耕した土', [TALLGRASS]: '草',
@@ -212,6 +217,10 @@ const TIERS = [
   { name: '鉄', mat: IRON_INGOT, speed: 6, dur: 251, lvl: 3, atk: 2, pal: [[228, 228, 232], [160, 160, 170]] },
   { name: '金', mat: GOLD_INGOT, speed: 12, dur: 33, lvl: 1, atk: 0, pal: [[250, 216, 72], [198, 150, 30]] },
   { name: 'ダイヤ', mat: DIAMOND, speed: 8, dur: 1562, lvl: 4, atk: 3, pal: [[98, 232, 226], [40, 168, 172]] },
+  // 地底の素材。黒鉄 < 紅炎 < 虚晶 の順に強い。虚晶は一番強い代わりに少し壊れやすい
+  { name: '黒鉄', mat: DARK_INGOT, speed: 9, dur: 2400, lvl: 5, atk: 4, pal: [[104, 106, 128], [50, 50, 66]] },
+  { name: '紅炎', mat: EMBER, speed: 10, dur: 1800, lvl: 6, atk: 5, pal: [[246, 112, 44], [160, 42, 26]] },
+  { name: '虚晶', mat: VOID_GEM, speed: 12, dur: 1200, lvl: 7, atk: 6, pal: [[184, 132, 250], [96, 52, 178]] },
 ];
 const TYPES = [['pick', 'のツルハシ', 2], ['axe', 'の斧', 3], ['shovel', 'のシャベル', 2], ['sword', 'の剣', 4], ['hoe', 'のクワ', 1]];   // [種類, 名前, 基本攻撃力]
 const toolId = (tier, type) => 200 + tier * 10 + type;
@@ -234,7 +243,7 @@ for (let b = TORCH; b <= TORCH + 4; b++) { HARD[b] = 0.05; NAME[b] = '松明'; C
 NAME[CHARCOAL] = '木炭';
 SMELT[LOG] = CHARCOAL;   // 原木を焼くと木炭
 FUEL[CHARCOAL] = 8;      // 燃料としては石炭と同じ
-const isSprite = b => b >= 100 || b === TORCH || b === SAPLING;   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
+const isSprite = b => b >= 100 || b === TORCH || b === SAPLING || b === 65;   // 65=光るキノコ   // ドット絵で表示するアイテム（松明はブロックだが見た目は絵）
 // どのツールで速く壊せるか
 const TOOL_FOR = {};
 for (const b of [STONE, COBBLE, SANDSTONE, COAL_ORE, IRON_ORE, GOLD_ORE, DIAMOND_ORE, FURNACE, ICE]) TOOL_FOR[b] = 'pick';
@@ -269,11 +278,14 @@ TOOLS[SHIELD] = { type: 'shield', tier: 2, speed: 1, dur: 336, lvl: 0, dmg: 1 };
 TOOL_FOR[LEAF] = TOOL_FOR[PINELEAF] = TOOL_FOR[WOOL] = 'shears';
 // 防具: 300 + ランク*10 + 部位（0=頭 1=胴 2=脚 3=足）。鉄・金・ダイヤのみ。def=防御（1につきダメージ4%減）
 const ARMOR = {};
-const ARMOR_PARTS = [['ヘルメット', [2, 2, 3], 11], ['チェストプレート', [6, 5, 8], 16], ['レギンス', [5, 3, 6], 15], ['ブーツ', [2, 1, 3], 13]];   // [名前, 防御(鉄,金,ダイヤ), 耐久の基準]
+const ARMOR_PARTS = [['ヘルメット', 11], ['チェストプレート', 16], ['レギンス', 15], ['ブーツ', 13]];   // [名前, 耐久の基準]
+const ARMOR_TIERS = [2, 3, 4, 5, 6, 7];   // 鉄・金・ダイヤ・黒鉄・紅炎・虚晶
+const ARMOR_DEF = { 2: [2, 6, 5, 2], 3: [2, 5, 3, 1], 4: [3, 8, 6, 3], 5: [3, 8, 7, 3], 6: [4, 8, 7, 3], 7: [4, 9, 7, 3] };   // 部位ごとの防御（全身で 鉄15 金11 ダイヤ20 黒鉄21 紅炎22 虚晶23）
+const ARMOR_DUR = { 2: 15, 3: 7, 4: 33, 5: 45, 6: 38, 7: 30 };   // [名前, 防御(鉄,金,ダイヤ), 耐久の基準]
 const armorId = (tier, part) => 300 + tier * 10 + part;
-[2, 3, 4].forEach((ti, k) => ARMOR_PARTS.forEach(([label, defs, dm], pi) => {
+ARMOR_TIERS.forEach(ti => ARMOR_PARTS.forEach(([label, dm], pi) => {
   const id = armorId(ti, pi);
-  ARMOR[id] = { part: pi, tier: ti, def: defs[k], dur: dm * [15, 7, 33][k] };
+  ARMOR[id] = { part: pi, tier: ti, def: ARMOR_DEF[ti][pi], dur: dm * ARMOR_DUR[ti] };
   NAME[id] = TIERS[ti].name + 'の' + label;
 }));
 // ---- チェスト・食べ物（第3弾） ----
@@ -294,6 +306,24 @@ Object.assign(NAME, { [BOMB]: '爆薬', [GUNPOWDER]: '火薬', [WARP_ORB]: 'ワ�
 HARD[BOMB] = 0.5;
 Object.assign(NAME, { [CORE]: '深層岩', [PORTAL]: '門' });
 HARD[CORE] = Infinity; HARD[PORTAL] = 0.6;
+// ---- 地底（第6弾） ----
+Object.assign(NAME, { [DEEPSTONE]: '深石', [DEEP_BRICK]: '深石レンガ', [GLOWMOSS]: '光苔', [MYCEL]: '菌糸土', [GLOWSHROOM]: '光るキノコ',
+  [MUSH_STEM]: 'キノコの柄', [MUSH_CAP]: 'キノコの傘', [GLOW_ORE]: '灯晶石', [DARKIRON_ORE]: '黒鉄鉱', [EMBER_ORE]: '紅炎石', [VOID_ORE]: '虚晶石',
+  [LAMP]: '灯晶ランプ', [GLOW_DUST]: '灯晶', [DARK_INGOT]: '黒鉄インゴット', [EMBER]: '紅炎', [VOID_GEM]: '虚晶' });
+Object.assign(HARD, { [DEEPSTONE]: 4, [DEEP_BRICK]: 4, [GLOWMOSS]: 1, [MYCEL]: 0.9, [GLOWSHROOM]: 0.05, [MUSH_STEM]: 1.5, [MUSH_CAP]: 0.6,
+  [GLOW_ORE]: 4, [DARKIRON_ORE]: 6, [EMBER_ORE]: 7, [VOID_ORE]: 8, [LAMP]: 0.6 });
+for (const b of [DEEPSTONE, DEEP_BRICK, GLOW_ORE, DARKIRON_ORE, EMBER_ORE, VOID_ORE]) TOOL_FOR[b] = 'pick';
+TOOL_FOR[GLOWMOSS] = TOOL_FOR[MYCEL] = 'shovel'; TOOL_FOR[MUSH_STEM] = TOOL_FOR[MUSH_CAP] = 'axe';
+// 掘るのに必要なツルハシ: 灯晶石=石 黒鉄鉱=鉄 紅炎石=ダイヤ 虚晶石=黒鉄
+Object.assign(NEED_PICK, { [DEEPSTONE]: 1, [DEEP_BRICK]: 1, [GLOW_ORE]: 2, [DARKIRON_ORE]: 3, [EMBER_ORE]: 4, [VOID_ORE]: 5 });
+SMELT[DARKIRON_ORE] = DARK_INGOT;
+FUEL[EMBER] = 64;   // 紅炎は石炭の8倍長く燃える
+// 自分で光るブロックと、その光が届く歩数（松明=8）
+const GLOW = { [GLOWMOSS]: 3, [GLOWSHROOM]: 5, [MUSH_CAP]: 6, [GLOW_ORE]: 5, [EMBER_ORE]: 3, [VOID_ORE]: 3, [LAMP]: 11 };
+for (let b = TORCH; b <= TORCH + 4; b++) GLOW[b] = TORCH_R;
+const LIGHT_R = 11;   // 一番遠くまで届く光（灯晶ランプ）
+// 全身そろえた時の効果。eqCode() は4部位の素材ランクを並べた文字列
+const fullSet = t => eqCode() === String(t).repeat(4);
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -304,7 +334,7 @@ let seed = 0;   // 地形のノイズに使う値（世界ごとに変える）
 // sky・light: 昼夜が無い世界の空の色と明るさ。nosky: 太陽・月・空からの光を使わない。void: 底が抜けていて落ちると倒れる
 const DIMS = [
   { name: '地上' },
-  { name: '地底（仮）', sky: [0.16, 0.05, 0.04], light: [0.66, 0.56, 0.52], nosky: true },
+  { name: '地底', sky: [0.02, 0.02, 0.035], light: [0.30, 0.29, 0.36], nosky: true },   // 暗い。明かりは光苔・キノコ・灯晶・松明
   { name: '虚空（仮）', sky: [0.03, 0.02, 0.07], light: [0.80, 0.78, 0.88], nosky: true, void: true },
 ];
 let dim = 0, worldSeed = 0;   // 今いる世界と、サーバーから受け取ったワールドのシード
@@ -395,21 +425,99 @@ function finishChunk(d, cx, cz) {
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) calcTop(d, x, z);
   return d;
 }
-// 地底: 天井と床が岩盤で、石の中に大きな空洞が広がる。(8,8) の周りに到着用の小部屋
+// 地底: 天井と床が岩盤の、深石でできた広い地下世界。暗くて、光苔・光るキノコ・灯晶石・松明の明かりが頼り
+// 低い所（y<=DEEP_SEA）の空洞は地底湖になる。ところどころに光るキノコの森がある
+const DEEP_SEA = 6;
+function deepAir(wx, y, wz) {   // 地形の元になる空洞（飾りを付ける前）
+  if (y <= 2 || y >= H - 4) return false;
+  const n = vnoise3(wx * 0.03, y * 0.055, wz * 0.03, 800) * 0.7 + vnoise3(wx * 0.08, y * 0.11, wz * 0.08, 801) * 0.3;
+  const mid = 1 - Math.abs(y - 26) / 24;   // 真ん中の高さほど広く空く
+  return n > 0.6 - mid * 0.13;
+}
+const deepForest = (wx, wz) => fbm(wx * 0.012, wz * 0.012, 830, 3) > 0.57;   // 光るキノコの森
+// 遺跡の場所（中身は次の段階で作る）。320 ブロック四方に1つ。虚晶石はこの近くにだけ出る
+const RUIN_CELL = 320;
+function ruinOf(wx, wz) {
+  const i = Math.floor(wx / RUIN_CELL), j = Math.floor(wz / RUIN_CELL);
+  return { x: i * RUIN_CELL + 64 + Math.floor(hash(i, j, 860) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash(i, j, 861) * 192) };
+}
 function genDeep(cx, cz) {
-  const d = new Uint8Array(CS * CS * H);
+  const d = new Uint8Array(CS * CS * H), I = (x, y, z) => (y * CS + z) * CS + x;
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
     const wx = cx * CS + x, wz = cz * CS + z, room = Math.abs(wx - 8) <= 3 && Math.abs(wz - 8) <= 3;
+    const ru = ruinOf(wx, wz), nearRuin = Math.hypot(wx - ru.x, wz - ru.z) < 48;
     for (let y = 0; y < H; y++) {
-      let b = STONE;
+      let b = DEEPSTONE;
       if (y === 0 || y === H - 1) b = CORE;
       else if (y === 1 || y === H - 2) b = BEDROCK;
       else if (room && y >= 20 && y <= 23) b = AIR;
       else if (room && y === 19) b = COBBLE;
-      else if (y > 2 && y < H - 4 && vnoise3(wx * 0.04, y * 0.07, wz * 0.04, 800) > 0.53) b = AIR;
-      d[(y * CS + z) * CS + x] = b;
+      else if (deepAir(wx, y, wz)) b = y <= DEEP_SEA ? WATER : AIR;
+      else {   // 鉱石: 灯晶石 > 黒鉄鉱 > 紅炎石（深い所だけ）> 虚晶石（遺跡の近くだけ）
+        const r = hash3(wx, y, wz, 870);
+        if (nearRuin && r < 0.00012) b = VOID_ORE;
+        else if (y <= 14 && r > 0.4 && vnoise3(wx * 0.4, y * 0.4, wz * 0.4, 852) > 0.9) b = EMBER_ORE;
+        else if (r > 0.35 && vnoise3(wx * 0.35, y * 0.35, wz * 0.35, 851) > 0.9) b = DARKIRON_ORE;
+        else if (r > 0.3 && vnoise3(wx * 0.3, y * 0.3, wz * 0.3, 850) > 0.875) b = GLOW_ORE;
+      }
+      d[I(x, y, z)] = b;
     }
   }
+  // 床・天井の飾り（その列の中だけで決まるので、チャンクの境目でずれない）
+  for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+    const wx = cx * CS + x, wz = cz * CS + z, forest = deepForest(wx, wz);
+    const moss = vnoise(wx * 0.1, wz * 0.1, 840) > 0.66;
+    for (let y = 3; y < H - 3; y++) {
+      const b = d[I(x, y, z)], dn = d[I(x, y - 1, z)], up = d[I(x, y + 1, z)];
+      if (b !== AIR) continue;
+      const h = hash3(wx, y, wz, 880);
+      if (dn === DEEPSTONE) {   // 床
+        if (forest) { d[I(x, y - 1, z)] = MYCEL; if (h < 0.1) d[I(x, y, z)] = GLOWSHROOM; }
+        else if (moss) { d[I(x, y - 1, z)] = GLOWMOSS; if (h < 0.03) d[I(x, y, z)] = GLOWSHROOM; }
+        else if (h < 0.025) {   // 石筍
+          const n = 1 + Math.floor(hash3(wx, y, wz, 881) * 3);
+          for (let k = 0; k < n && d[I(x, y + k, z)] === AIR; k++) d[I(x, y + k, z)] = DEEPSTONE;
+        } else if (h < 0.03) d[I(x, y, z)] = GLOWSHROOM;
+      }
+      if (up === DEEPSTONE && d[I(x, y, z)] === AIR) {   // 天井
+        if (h > 0.96) {   // 鍾乳石
+          const n = 1 + Math.floor(hash3(wx, y, wz, 882) * 4);
+          for (let k = 0; k < n && y - k > 2 && d[I(x, y - k, z)] === AIR; k++) d[I(x, y - k, z)] = DEEPSTONE;
+        } else if (h > 0.93 || (moss && h > 0.8)) d[I(x, y + 1, z)] = GLOWMOSS;
+      }
+    }
+  }
+  // 大きな光るキノコ: 森の中で、9x9 の区画ごとに1本の候補。区画は隣のチャンクにはみ出すので周りも見る
+  const G = 9;
+  for (let gz = Math.floor((cz * CS - 4) / G); gz <= Math.floor((cz * CS + CS + 3) / G); gz++)
+    for (let gx = Math.floor((cx * CS - 4) / G); gx <= Math.floor((cx * CS + CS + 3) / G); gx++) {
+      if (hash(gx, gz, 890) > 0.7) continue;
+      const mx = gx * G + 2 + Math.floor(hash(gx, gz, 891) * 5), mz = gz * G + 2 + Math.floor(hash(gx, gz, 892) * 5);
+      if (!deepForest(mx, mz)) continue;
+      let fy = -1;   // 床（下が地面で、上に9マス空いている所）
+      for (let y = 44; y > DEEP_SEA + 1; y--) {
+        if (!deepAir(mx, y, mz) && deepAir(mx, y + 1, mz)) {
+          let ok = true;
+          for (let k = 1; k <= 9 && ok; k++) ok = deepAir(mx, y + k, mz);
+          if (ok) { fy = y + 1; break; }
+        }
+      }
+      if (fy < 0) continue;
+      const sh = 4 + Math.floor(hash(gx, gz, 893) * 3), r = 2 + Math.floor(hash(gx, gz, 894) * 2), top = fy + sh;
+      const put = (wx, y, wz, b) => {
+        const lx = wx - cx * CS, lz = wz - cz * CS;
+        if (lx < 0 || lx >= CS || lz < 0 || lz >= CS || y >= H - 3) return;
+        const o = d[I(lx, y, lz)];
+        if (o === AIR || o === GLOWSHROOM || b === MUSH_STEM) d[I(lx, y, lz)] = b;
+      };
+      for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+        const dd = dx * dx + dz * dz;
+        if (dd <= r * r + 1) put(mx + dx, top, mz + dz, MUSH_CAP);                                  // かさの上面
+        if (dd <= (r - 1) * (r - 1) + 1) put(mx + dx, top + 1, mz + dz, MUSH_CAP);                  // 盛り上がり
+        if (dd > (r - 1) * (r - 1) + 1 && dd <= r * r + 1) put(mx + dx, top - 1, mz + dz, MUSH_CAP); // ふちが垂れる
+      }
+      for (let y = fy; y < top; y++) put(mx, y, mz, MUSH_STEM);
+    }
   return finishChunk(d, cx, cz);
 }
 // 虚空: 何も無い空間に、(8,8) を中心にした浮き島が1つ
@@ -523,7 +631,7 @@ function getChunk(cx, cz) {
   const k = ckey(cx, cz);
   if (k === lastKey) return lastChunk;
   let c = chunks.get(k);
-  if (!c) { c = genChunk(cx, cz); chunks.set(k, c); }
+  if (!c) { c = genChunk(cx, cz); c.glow = []; for (let i = 0; i < c.length; i++) if (GLOW[c[i]]) c.glow.push(i); chunks.set(k, c); }   // glow: 光るブロックの位置
   lastKey = k; lastChunk = c;
   return c;
 }
@@ -537,11 +645,12 @@ function setBlock(x, y, z, b) {
   const cx = x >> 4, cz = z >> 4, i = (y * CS + (z & 15)) * CS + (x & 15), k = ckey(cx, cz);
   const cd = getChunk(cx, cz), prev = cd[i];
   cd[i] = b; calcTop(cd, x & 15, z & 15);
+  if (GLOW[b]) cd.glow.push(i);
   let e = edits.get(k);
   if (!e) { e = new Map(); edits.set(k, e); }
   e.set(i, b);
   const done = new Set();   // 影（AO）が隣チャンクにも及ぶので周囲も作り直す。松明が増減した時は光が届く範囲まで
-  const r = isTorch(b) || isTorch(prev) ? TORCH_R + 1 : 1;
+  const r = GLOW[b] || GLOW[prev] ? LIGHT_R + 1 : 1;
   for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     const k2 = ckey((x + dx) >> 4, (z + dz) >> 4);
     if (done.has(k2)) continue;
@@ -556,7 +665,7 @@ function batch(fn) {
   meshBatch = new Set();
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
 const solid = b => opaque(b) || b === GLASS || b === PORTAL;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
@@ -684,6 +793,30 @@ const WHITE = [1, 1, 1];
     if (x >= 7 && x <= 8 && y >= 4 && y <= 7) return y === 4 || y === 7 ? [120, 120, 128] : [216, 216, 224];
     return chestWood(x, y, s);
   }), chestTop);
+  // ---- 地底 ----
+  const deepF = (x, y, s) => R(x >> 2, y, s + 5) > 0.94 ? [92, 92, 112] : sh([60, 60, 74], (R(x >> 1, y >> 1, s) - 0.5) * 22 + (R(x, y, s + 1) - 0.5) * 10);
+  const deepOreF = (spec, hi) => (x, y, s) => {   // 深石に鉱石の粒
+    for (const [cx, cy] of [[2, 3], [9, 2], [5, 7], [12, 8], [3, 12], [10, 13]]) {
+      const dx = x - cx, dy = y - cy;
+      if (dx >= 0 && dx <= 2 && dy >= 0 && dy <= 2 && !(dx === 2 && dy === 2) && !(dx === 0 && dy === 2)) return dx + dy === 0 ? hi : spec;
+    }
+    return deepF(x, y, s);
+  };
+  const deep = mk(deepF);
+  set(DEEPSTONE, deep);
+  set(DEEP_BRICK, mk((x, y, s) => { const row = y >> 2; return y % 4 === 3 || (x + row * 4) % 8 === 7 ? [36, 36, 46] : sh([70, 70, 86], (R((x + row * 4) >> 3, row, s) - 0.5) * 16 + (R(x, y, s + 1) - 0.5) * 8); }));
+  const mossC = (x, y, s) => { const r = R(x, y, s); return r > 0.85 ? [170, 255, 214] : r < 0.2 ? [40, 130, 104] : sh([80, 200, 160], (R(x >> 1, y >> 1, s + 1) - 0.5) * 30); };
+  set(GLOWMOSS, mk(mossC), mk((x, y, s) => y < 3 + (R(x, 0, s + 3) > 0.5 ? 1 : 0) ? mossC(x, y, s) : deepF(x, y, s)), deep);
+  const mycD = (x, y, s) => sh([70, 54, 62], (R(x, y, s) - 0.5) * 20);
+  set(MYCEL, mk((x, y, s) => R(x, y, s) > 0.88 ? [196, 170, 210] : sh([118, 92, 128], (R(x >> 1, y >> 1, s + 1) - 0.5) * 24)),
+    mk((x, y, s) => y < 2 + (R(x, 0, s + 3) > 0.6 ? 1 : 0) ? sh([118, 92, 128], (R(x, y, s) - 0.5) * 20) : mycD(x, y, s)), mk(mycD));
+  set(MUSH_STEM, mk(ringF([226, 220, 204], [206, 198, 180], [190, 182, 166])), mk((x, y, s) => sh(x % 3 === 0 ? [196, 188, 170] : [224, 218, 202], (R(x, y >> 2, s) - 0.5) * 12)));
+  set(MUSH_CAP, mk((x, y, s) => { const r = R(x >> 1, y >> 1, s); return r > 0.8 ? [210, 250, 255] : sh([70, 168, 222], (R(x, y, s + 1) - 0.5) * 22); }));
+  set(GLOW_ORE, mk(deepOreF([132, 232, 250], [230, 255, 255])));
+  set(DARKIRON_ORE, mk(deepOreF([28, 28, 36], [150, 154, 184])));
+  set(EMBER_ORE, mk(deepOreF([236, 90, 32], [255, 214, 120])));
+  set(VOID_ORE, mk(deepOreF([150, 90, 236], [236, 210, 255])));
+  set(LAMP, mk((x, y, s) => frame(x, y) || x === 7 || y === 7 ? [52, 52, 66] : sh([136, 222, 246], (R(x, y, s) - 0.5) * 30 + ((x + y) % 5 === 0 ? 34 : 0))));
   set(CORE, mk((x, y, s) => R(x, y, s) > 0.93 ? [70, 96, 150] : sh([26, 26, 34], (R(x >> 1, y >> 1, s + 1) - 0.5) * 22)));   // ほぼ黒に青い粒
   set(PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.3 + Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.4 ? [255, 170, 60] : w > -0.3 ? [214, 84, 30] : [70, 20, 16]; }));   // 赤と橙の渦
   set(BOMB, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5); return d < 1.6 ? [236, 226, 196] : d < 3 ? [30, 28, 28] : frame(x, y) ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12); }),
@@ -728,21 +861,23 @@ function plantMesh(V, I, b, wx, y, wz, bi, lt, tl = 0) {
 // ---------- 松明の光 ----------
 // チャンクとその周り TORCH_R マスについて、各マスに松明の光が何段階届くかを求める。
 // 松明から空気（すり抜けるマス）を伝って1歩ごとに1段階弱くなる（壁の向こうへは回り込んだ分しか届かない）。
-// 松明は自然には生えないので、プレイヤーの変更（edits）の中から探せば全部見つかる。
+// 光るブロック（松明・光苔・灯晶など）は各チャンクの glow に位置が入っている。光の強さは GLOW の歩数
 function torchLight(cx, cz) {
-  const R = TORCH_R, W = CS + R * 2, x0 = cx * CS - R, z0 = cz * CS - R;
+  const R = LIGHT_R, W = CS + R * 2, x0 = cx * CS - R, z0 = cz * CS - R;
   let L = null;
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-    const e = edits.get(ckey(cx + dx, cz + dz));
-    if (e) for (const [i, b] of e) {
-      if (!isTorch(b)) continue;
+    const c = getChunk(cx + dx, cz + dz);
+    for (const i of c.glow) {
+      const g = GLOW[c[i]];
+      if (!g) continue;   // もう壊された
       const tx = (cx + dx) * CS + (i & 15) - x0, ty = i >> 8, tz = (cz + dz) * CS + ((i >> 4) & 15) - z0;
+      if (tx + g <= 0 || tx - g >= W - 1 || tz + g <= 0 || tz - g >= W - 1) continue;   // このチャンクまで届かない
       if (tx < 0 || tx >= W || tz < 0 || tz >= W) continue;
       if (!L) L = new Uint8Array(W * W * H);
       const s = (ty * W + tz) * W + tx;
-      if (L[s] >= R) continue;
-      L[s] = R;
-      const q = [tx, ty, tz, R];
+      if (L[s] >= g) continue;
+      L[s] = g;
+      const q = [tx, ty, tz, g];
       for (let h = 0; h < q.length; h += 4) {
         const lv = q[h + 3] - 1;
         if (lv <= 0) continue;
@@ -758,7 +893,7 @@ function torchLight(cx, cz) {
   }
   if (!L) return null;
   // チャンク内の座標(-R〜CS+R-1)で引けるようにして返す。値は 0〜1 の明るさ
-  return (lx, y, lz) => y < 0 || y >= H ? 0 : Math.min(1, TORCH_GAIN * Math.pow(L[(y * W + lz + R) * W + lx + R] / R, 1.2));
+  return (lx, y, lz) => y < 0 || y >= H ? 0 : Math.min(1, TORCH_GAIN * Math.pow(L[(y * W + lz + R) * W + lx + R] / TORCH_R, 1.2));
 }
 // 松明の見た目: 細い棒の先に炎。壁の松明は壁際から斜めに生える。自分自身は光の強さ1（夜でも明るい）
 function torchMesh(V, I, b, wx, y, wz) {
@@ -805,13 +940,17 @@ function buildMesh(cx, cz) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
     if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
-    if (b === BED || b === SAPLING || isCake(b) || b === PORTAL) {
+    if (b === BED || b === SAPLING || isCake(b) || b === PORTAL || b === GLOWSHROOM) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
       const X = ox + x, Z = oz + z;
       if (b === BED) {   // 木の台・赤い布団・白い枕
         boxMesh(ov, oi, X, y, Z, X + 1, y + 0.3, Z + 1, null, null, lt, tl, TILE[PLANKS][0]);
         boxMesh(ov, oi, X + 0.03, y + 0.3, Z + 0.03, X + 0.97, y + 0.56, Z + 0.97, null, null, lt, tl, TILE[BED][0]);
         boxMesh(ov, oi, X + 0.15, y + 0.56, Z + 0.08, X + 0.85, y + 0.66, Z + 0.38, null, null, lt, tl, TILE[WOOL][0]);
+      } else if (b === GLOWSHROOM) {   // 白い柄に光るかさ。位置と大きさはマスごとに少しずらす
+        const ox2 = 0.25 + hash3(X, y, Z, 60) * 0.5, oz2 = 0.25 + hash3(X, y, Z, 61) * 0.5, s2 = 0.15 + hash3(X, y, Z, 62) * 0.1, h2 = 0.3 + hash3(X, y, Z, 63) * 0.25;
+        boxMesh(ov, oi, X + ox2 - 0.05, y, Z + oz2 - 0.05, X + ox2 + 0.05, y + h2, Z + oz2 + 0.05, null, null, 1, 1, TILE[MUSH_STEM][1]);
+        boxMesh(ov, oi, X + ox2 - s2, y + h2, Z + oz2 - s2, X + ox2 + s2, y + h2 + 0.12, Z + oz2 + s2, null, null, 1, 1, TILE[MUSH_CAP][0]);
       } else if (b === PORTAL) {   // 枠の上面とそろう光る板。上に立てる
         boxMesh(ov, oi, X, y + 0.8, Z, X + 1, y + 1, Z + 1, null, null, 1, 1, TILE[PORTAL][0]);
       } else if (isCake(b)) {   // 食べた分だけ片側から欠けていく
@@ -1150,6 +1289,15 @@ const SPR = {}, SPR_IDS = [];
   mk(GUNPOWDER, set => { each((x, y) => { if ((x - 7.5) ** 2 / 34 + (y - 10) ** 2 / 10 < 1 && y <= 12) set(x, y, (x * 5 + y * 3) % 7 < 2 ? [120, 120, 126] : (x + y) % 3 ? [70, 70, 76] : [46, 46, 50]); }); });
   mk(WARP_ORB, set => { each((x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 6) set(x, y, d < 2 ? [236, 255, 252] : Math.floor(d + Math.atan2(y - 7.5, x - 7.5) * 1.2 + 9) % 2 ? [60, 200, 196] : [28, 132, 150]); }); });
   mk(GUIDE_EYE, set => { each((x, y) => { const d = Math.hypot(x - 7.5, y - 7.5); if (d < 6.5) set(x, y, d < 1.6 ? [16, 20, 26] : d < 3.4 ? [250, 214, 70] : d > 5.4 ? [28, 132, 150] : [150, 232, 226]); }); });
+  // ---- 地底の素材 ----
+  mk(GLOW_DUST, set => { for (const [x0, y0, h] of [[4, 6, 6], [8, 3, 9], [11, 7, 5]]) for (let i = 0; i < h; i++) { set(x0, y0 + i, [150, 236, 252]); set(x0 + 1, y0 + i, i < 2 ? [240, 255, 255] : [80, 180, 214]); } });
+  mk(DARK_INGOT, ingot([98, 100, 122], [50, 50, 64], [158, 160, 186]));
+  mk(EMBER, set => { each((x, y) => { const d = Math.abs(x - 7.5) * 1.1 + Math.abs(y - 9); if (d < 5.5 && y > 2) set(x, y, d < 2 ? [255, 226, 130] : y < 8 ? [255, 132, 48] : [196, 52, 30]); }); });
+  mk(VOID_GEM, set => { each((x, y) => { const d = Math.abs(x - 7.5) + Math.abs(y - 8) * 0.8; if (d < 6.5) set(x, y, d < 2 ? [244, 226, 255] : x < y ? [118, 64, 200] : [176, 128, 248]); }); });
+  mk(65, set => {   // 光るキノコ
+    for (let y = 8; y <= 14; y++) { set(7, y, [226, 220, 204]); set(8, y, [196, 188, 170]); }
+    each((x, y) => { if ((x - 7.5) ** 2 / 30 + (y - 7) ** 2 / 9 < 1 && y <= 7) set(x, y, (x + y) % 4 === 0 ? [210, 250, 255] : [70, 168, 222]); });
+  });
   // 防具（素材の色だけ変えて使い回す）
   const ARM_DRAW = [
     m => set => { for (let y = 4; y <= 10; y++) for (let x = 3; x <= 12; x++) { if (y === 4 && (x === 3 || x === 12)) continue; if (y >= 8 && x >= 6 && x <= 9) continue; set(x, y, y < 6 ? m[0] : m[1]); } for (let x = 4; x <= 7; x++) set(x, 5, [255, 255, 255]); },
@@ -1157,7 +1305,7 @@ const SPR = {}, SPR_IDS = [];
     m => set => { for (let y = 2; y <= 13; y++) for (let x = 4; x <= 11; x++) { if (y > 5 && (x === 7 || x === 8)) continue; set(x, y, y <= 3 ? m[0] : x < 8 ? m[0] : m[1]); } },
     m => set => { for (const x0 of [2, 9]) for (let y = 6; y <= 13; y++) for (let x = x0; x <= x0 + 4; x++) { if (y < 11 && (x === x0 || x === x0 + 4)) continue; set(x, y, y >= 11 ? m[1] : m[0]); } },
   ];
-  [2, 3, 4].forEach(ti => ARM_DRAW.forEach((fn, pi) => mk(armorId(ti, pi), fn(TIERS[ti].pal))));
+  ARMOR_TIERS.forEach(ti => ARM_DRAW.forEach((fn, pi) => mk(armorId(ti, pi), fn(TIERS[ti].pal))));
 }
 const sprTex = gl.createTexture();
 {
@@ -1329,7 +1477,7 @@ function damage(v, cause) {
 function updateStats(dt) {
   if (P.y < -24) { P.inv = 0; damage(100, '奈落'); }   // 虚空の世界で島から落ちた
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
-  if (P.land > 0) { if (!inWater) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
+  if (P.land > 0) { if (!inWater && !fullSet(7)) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
   // スタミナ: ダッシュをやめて1秒たつと回復。使い切ると4まで戻るまでダッシュ不可
   P.rest += dt;
   if (P.rest > 1 && P.st < 20) P.st = Math.min(20, P.st + 3 * dt);
@@ -1386,6 +1534,11 @@ function dropsOf(b, tool) {
   }
   if (b === GLASS) return [];   // ガラスは割れて無くなる
   if (b === PORTAL) return [];
+  if (b === GLOW_ORE) return Array(2 + Math.floor(Math.random() * 2)).fill(GLOW_DUST);   // 灯晶石は灯晶を2〜3個
+  if (b === EMBER_ORE) return [EMBER];
+  if (b === VOID_ORE) return [VOID_GEM];
+  if (b === GLOWMOSS) return [DEEPSTONE];   // 苔は剥がれて、下の深石だけ残る
+  if (b === MYCEL) return [DIRT];
   if (isCake(b)) return b === CAKE0 ? [CAKE0] : [];   // 食べかけのケーキは回収できない
   if (b >= CARROT0 && b <= POTATO3) {                  // 育ちきっていれば 2〜4個、途中なら植えた1個が戻る
     const it = b <= CARROT3 ? CARROT : POTATO;
@@ -1403,7 +1556,7 @@ function dropsOf(b, tool) {
 function breakBlock(x, y, z, b, tool) {
   netSet(x, y, z, AIR, b, dropsOf(b, tool));
   const up = getBlock(x, y + 1, z);
-  if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));   // 上に生えていた植物も一緒に壊れる
+  if (onTop(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));   // 上に生えていた植物も一緒に壊れる
   dropTorches(x, y, z);
 }
 // (x,y,z) のブロックが無くなった時、そこに立てていた・付けていた松明を落とす
@@ -1512,7 +1665,7 @@ function useItem() {
   if (st && TOOLS[st.b] && TOOLS[st.b].type === 'hoe' && (target.b === GRASS || target.b === DIRT)) {
     const up = getBlock(x, y + 1, z);
     if (solid(up) || up === WATER || up === BED) return;
-    if (isPlant(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
+    if (onTop(up)) netSet(x, y + 1, z, AIR, up, dropsOf(up, null));
     netSet(x, y, z, FARMLAND, target.b);
     useTool();
     return;
@@ -1829,8 +1982,13 @@ RECIPES.push(
   { p: [' G ', 'GCG', ' G '], k: { G: GOLD_INGOT, C: COAL }, out: [CLOCK, 1] },
   { p: ['GGG', 'GAG', 'GGG'], k: { G: GOLD_INGOT, A: APPLE }, out: [GOLDEN_APPLE, 1] },
 );
+RECIPES.push(
+  { p: ['SS', 'SS'], k: { S: DEEPSTONE }, out: [DEEP_BRICK, 4] },
+  { p: ['GG', 'GG'], k: { G: GLOW_DUST }, out: [LAMP, 1] },
+  { p: ['G', 'S'], k: { G: GLOW_DUST, S: STICK }, out: [TORCH, 4] },
+);
 const ARMOR_PAT = [['MMM', 'M M'], ['M M', 'MMM', 'MMM'], ['MMM', 'M M', 'M M'], ['M M', 'M M']];
-[2, 3, 4].forEach(ti => ARMOR_PAT.forEach((p, pi) => RECIPES.push({ p, k: { M: TIERS[ti].mat }, out: [armorId(ti, pi), 1], hide: ti > 2 })));
+ARMOR_TIERS.forEach(ti => ARMOR_PAT.forEach((p, pi) => RECIPES.push({ p, k: { M: TIERS[ti].mat }, out: [armorId(ti, pi), 1], hide: ti > 2 })));
 // ツール: ツルハシ・斧・シャベル・剣・クワ × 5素材
 const TOOL_PAT = [['MMM', ' S ', ' S '], ['MM', 'MS', ' S'], ['M', 'S', 'S'], ['M', 'M', 'S'], ['MM', ' S', ' S']];
 TIERS.forEach((T, ti) => TOOL_PAT.forEach((p, yi) => RECIPES.push({ p, k: { M: T.mat, S: STICK }, out: [toolId(ti, yi), 1], hide: ti > 0 })));
@@ -1960,6 +2118,7 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  '地底: 深石の地下世界。灯晶石（石のツルハシ）・黒鉄鉱（鉄）・紅炎石（ダイヤ、深い所）・虚晶石（黒鉄、遺跡の近く）が採れる。全身そろえると 紅炎=爆発ダメージ半分＋殴った相手が燃える、虚晶=落下ダメージなし＋敵に気づかれにくい。',
   '地底への門: 一番下の岩盤を爆薬で吹き飛ばすと、時々岩盤ブロックが手に入る。それを地面に 5×5 の輪（真ん中 3×3 は空ける。四隅は無くてよい）に並べ、真ん中で爆薬を爆発させると門が開く。門の上に少し立つと移動する。',
   '爆薬: 置いて右クリックで点火、3秒後に周りのブロックごと爆発する。火薬はタルボムから。ワープ玉（カスミが落とす）は右クリックで投げると、落ちた場所へ移動する。',
   '卵は鶏が時々産む。にんじんとじゃがいもはゾンビが時々落とし、耕した土に植えると増やせる。ケーキは置いて右クリックで4回食べられる。',
@@ -2611,9 +2770,13 @@ function simMob(m, dt) {
   let sp = 0, tgt = null, best = 32 * 32;   // 32ブロック以内のプレイヤーに気づく
   if (m.dead) return;
   if (K.hostile && (!K.neutral || m.angry)) {   // 一番近いプレイヤーを追う（カスミは怒っている時だけ）
-    const cand = [[myId, P.x, P.y, P.z]];
-    for (const [id, o] of others) if (o.ty > -50) cand.push([id, o.x, o.y, o.z]);
-    for (const c of cand) { const d = (c[1] - m.x) ** 2 + (c[2] - m.y) ** 2 + (c[3] - m.z) ** 2; if (d < best) { best = d; tgt = c; } }
+    const cand = [[myId, P.x, P.y, P.z, eqCode()]];
+    for (const [id, o] of others) if (o.ty > -50) cand.push([id, o.x, o.y, o.z, o.eq]);
+    for (const c of cand) {
+      const d = (c[1] - m.x) ** 2 + (c[2] - m.y) ** 2 + (c[3] - m.z) ** 2;
+      if (c[4] === '7777' && d > 10 * 10) continue;   // 虚晶の全身: 10ブロックより近づかないと気づかれない
+      if (d < best) { best = d; tgt = c; }
+    }
   }
   if (tgt) {
     m.dir = Math.atan2(-(tgt[1] - m.x), -(tgt[3] - m.z));
@@ -2718,7 +2881,7 @@ function attack() {
     if (mb.kind === 'sheep') { if (!mb.sheared) { mb.sheared = true; send({ t: 'shear', id: hit }); useTool(); } return true; }
   }
   const tool = heldTool(), dmg = tool ? tool.dmg : 1, l = Math.hypot(d[0], d[2]) || 1;
-  send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6 });
+  send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6, burn: fullSet(6) ? 1 : 0 });   // 紅炎の全身: 殴った相手が燃える
   if (tool) useTool();
   return true;
 }
@@ -2734,7 +2897,7 @@ function hurtMe(dmg, kx, kz, cause) {
   }
   dmg = armorReduce(dmg);
   P.inv = 0.3; P.kbx = kx; P.kbz = kz;   // 無敵時間は攻撃の間隔（0.35秒）より短く。長いと連打の半分が消える
-  if (P.ground) P.vy = 5;
+  if (P.ground && (kx || kz)) P.vy = 5;   // 燃えている時のダメージ（ノックバック無し）では跳ねない
   damage(dmg, cause);
 }
 // モブの見た目
@@ -2998,7 +3161,7 @@ function hurtByBoom(x, y, z, r) {
   const dx = P.x - x, dy = P.y + 0.9 - y, dz = P.z - z, d = Math.hypot(dx, dy, dz), R = r * 1.8;
   if (d >= R) return;
   const l = Math.hypot(dx, dz) || 1, k = 9 * (1 - d / R);
-  hurtMe(Math.ceil(16 * (1 - d / R)), dx / l * k, dz / l * k, '爆発');
+  hurtMe(Math.ceil(16 * (1 - d / R) / (fullSet(6) ? 2 : 1)), dx / l * k, dz / l * k, '爆発');   // 紅炎の全身: 爆発ダメージ半分
 }
 function explode(x, y, z, r, mobId) {
   const l = [], seen = new Set(), chain = [], f = Math.floor;
@@ -3015,7 +3178,7 @@ function explode(x, y, z, r, mobId) {
   }
   for (const [bx, by, bz] of l.slice()) {   // 足場を失った草・作物・松明も一緒に消す
     const up = getBlock(bx, by + 1, bz);
-    if ((isPlant(up) || isTorch(up) || up === BED || isCake(up)) && !seen.has(bx + ',' + (by + 1) + ',' + bz)) l.push([bx, by + 1, bz, AIR, up]);
+    if ((onTop(up) || isTorch(up) || up === BED || isCake(up)) && !seen.has(bx + ',' + (by + 1) + ',' + bz)) l.push([bx, by + 1, bz, AIR, up]);
   }
   if (l.length) netSets(l);
   for (const [bx, by, bz] of chain) igniteBomb(bx, by, bz, 0.3 + Math.random() * 0.5);

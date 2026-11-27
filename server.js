@@ -18,13 +18,16 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 60;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 72;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
-for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
+for (let tier = 0; tier < 8; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
 ITEM_IDS.add(BOMB);   // 爆薬
+ITEM_IDS.add(BEDROCK);
+for (let b = 61; b <= MAX_BLOCK; b++) ITEM_IDS.add(b);   // 地底のブロック
+for (let i = 150; i <= 153; i++) ITEM_IDS.add(i);        // 灯晶・黒鉄インゴット・紅炎・虚晶
 for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
-for (let tier = 2; tier < 5; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
+for (let tier = 2; tier < 8; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== CORE;   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
@@ -56,6 +59,19 @@ function save() {
 // 変更があれば3秒ごとに保存する。再デプロイ時は新しいサーバーが先にファイルを読み込み、
 // その後で古いサーバーが最後の保存をするため、最後の保存は新しい方に届かない。間隔を短くして消える分を最大3秒にする
 setInterval(save, 3000);
+// 燃えている物（紅炎の全身で殴られた）: 1秒ごとに モブ=2 プレイヤー=1 のダメージ、3秒で消える
+setInterval(() => {
+  for (const mob of mobs.values()) {
+    if (!(mob.burn > 0)) continue;
+    mob.burn--; mob.hp -= 2;
+    if (mob.hp > 0) broadcast({ t: 'mhurt', id: mob.id, kx: 0, kz: 0 }); else killMob(mob, mob.burnBy);
+  }
+  for (const q of players.values()) {
+    if (!(q.burn > 0)) continue;
+    q.burn--;
+    sendTo(q.ws, { t: 'hurt', dmg: 1, kx: 0, kz: 0, cause: q.burnBy + 'の炎' });
+  }
+}, 1000);
 // 再デプロイ時は SIGTERM が届く。最後に保存してから終わる
 // （npm start 経由だと node まで届かないことがあるので、railway.json で node server.js を直接起動している）
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => { save(); console.log(`終了(${sig}): ワールドを保存した`); process.exit(0); });
@@ -295,7 +311,7 @@ const handlers = {
   pos(p, m) {
     if (![m.x, m.y, m.z, m.yaw, m.pitch].every(num)) return;
     p.x = m.x; p.y = m.y; p.z = m.z; p.yaw = m.yaw; p.pitch = m.pitch; p.sn = m.sn ? 1 : 0; p.moved = true;
-    if (typeof m.eq === 'string' && /^[0-4]{4}$/.test(m.eq)) p.eq = m.eq;   // 着ている防具（他の人に見せる用）
+    if (typeof m.eq === 'string' && /^[0-7]{4}$/.test(m.eq)) p.eq = m.eq;   // 着ている防具（他の人に見せる用）
   },
   chat(p, m) {
     const text = clean(m.text, 100);
@@ -307,12 +323,14 @@ const handlers = {
     const q = players.get(m.id);
     if (!q || q === p || q.dim !== p.dim || !num(m.dmg) || dist2(p, q) > (m.ranged ? 60 * 60 : 36)) return;   // ranged: 矢
     sendTo(q.ws, { t: 'hurt', dmg: Math.max(1, Math.min(12, Math.floor(m.dmg))), kx: clampK(m.kx), kz: clampK(m.kz), cause: p.name });
+    if (m.burn && p.eq === '6666' && !m.ranged) { q.burn = 3; q.burnBy = p.name; }   // 紅炎の全身で殴られた: 3秒燃える
   },
   // モブを殴った → 体力はサーバーが持つ
   mhit(p, m) {
     const mob = mobs.get(m.id);
     if (!mob || mob.dim !== p.dim || !num(m.dmg)) return;
     mob.hp -= Math.max(1, Math.min(12, Math.floor(m.dmg)));
+    if (m.burn && p.eq === '6666') { mob.burn = 3; mob.burnBy = p.id; }
     if (mob.hp > 0) { broadcast({ t: 'mhurt', id: mob.id, kx: clampK(m.kx), kz: clampK(m.kz) }); return; }
     killMob(mob, p.id);
   },
