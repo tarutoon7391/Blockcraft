@@ -154,7 +154,8 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   CORE = 59, PORTAL = 60,
   // 地底のブロック
   DEEPSTONE = 61, DEEP_BRICK = 62, GLOWMOSS = 63, MYCEL = 64, GLOWSHROOM = 65, MUSH_STEM = 66, MUSH_CAP = 67,
-  GLOW_ORE = 68, DARKIRON_ORE = 69, EMBER_ORE = 70, VOID_ORE = 71, LAMP = 72;   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
+  GLOW_ORE = 68, DARKIRON_ORE = 69, EMBER_ORE = 70, VOID_ORE = 71, LAMP = 72,
+  RUIN_BRICK = 73, RUIN_CRACKED = 74, RUIN_PILLAR = 75, RUIN_RUNE = 76;   // 地底の遺跡   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
@@ -324,6 +325,11 @@ for (let b = TORCH; b <= TORCH + 4; b++) GLOW[b] = TORCH_R;
 const LIGHT_R = 11;   // 一番遠くまで届く光（灯晶ランプ）
 // 全身そろえた時の効果。eqCode() は4部位の素材ランクを並べた文字列
 const fullSet = t => eqCode() === String(t).repeat(4);
+// 遺跡のブロック: 硬く、鉄のツルハシ以上でないと何も落とさない。紋章石は光る
+Object.assign(NAME, { [RUIN_BRICK]: '遺跡レンガ', [RUIN_CRACKED]: 'ひび割れた遺跡レンガ', [RUIN_PILLAR]: '遺跡の柱', [RUIN_RUNE]: '紋章石' });
+Object.assign(HARD, { [RUIN_BRICK]: 12, [RUIN_CRACKED]: 8, [RUIN_PILLAR]: 12, [RUIN_RUNE]: 12 });
+for (const b of [RUIN_BRICK, RUIN_CRACKED, RUIN_PILLAR, RUIN_RUNE]) { TOOL_FOR[b] = 'pick'; NEED_PICK[b] = 3; }
+GLOW[RUIN_RUNE] = 7;
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -441,6 +447,38 @@ function ruinOf(wx, wz) {
   const i = Math.floor(wx / RUIN_CELL), j = Math.floor(wz / RUIN_CELL);
   return { x: i * RUIN_CELL + 64 + Math.floor(hash(i, j, 860) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash(i, j, 861) * 192) };
 }
+// 遺跡: 中心 (ruinOf) の周りに 25x25 の大広間（中は 21x21、高さ10）。四方の壁の真ん中から長さ22の通路が延びる。
+// 広間の四隅にチェスト（中身は最初に開けた時にサーバーが決める）、真ん中に紋章石の台、柱が4本、壁に紋章石の明かり
+const RUIN_Y = 14;   // 広間の床の高さ
+function ruinBlock(dx, y, dz, wx, wz) {   // 遺跡の一部なら置くブロック、違えば -1
+  const ax = Math.abs(dx), az = Math.abs(dz), F = RUIN_Y;
+  const brick = () => hash3(wx, y, wz, 900) < 0.18 ? RUIN_CRACKED : RUIN_BRICK;
+  if (ax <= 12 && az <= 12 && y >= 2 && y < F - 2) return DEEPSTONE;   // 広間の下は岩の土台（宙に浮かないように）
+  if (ax <= 12 && az <= 12 && y >= F - 2 && y <= F + 11) {
+    if (ax <= 10 && az <= 10 && y >= F && y <= F + 9) {   // 広間の中
+      if ((ax === 6 || ax === 7) && (az === 6 || az === 7)) return RUIN_PILLAR;
+      if (ax === 9 && az === 9 && y === F) return CHEST;
+      if (ax <= 2 && az <= 2 && y === F) return ax === 0 && az === 0 ? RUIN_RUNE : RUIN_BRICK;
+      return AIR;
+    }
+    if (((az <= 1 && ax > 10) || (ax <= 1 && az > 10)) && y >= F && y <= F + 3) return AIR;   // 出入口
+    if (y === F + 5 && ((ax === 11 && az <= 10 && az % 4 === 2) || (az === 11 && ax <= 10 && ax % 4 === 2))) return RUIN_RUNE;   // 壁の明かり
+    return brick();
+  }
+  const along = az <= 2 ? ax : ax <= 2 ? az : 0, side = az <= 2 ? az : ax;
+  if (along > 12 && along <= 34 && y >= F - 1 && y <= F + 4) return side <= 1 && y >= F && y <= F + 3 ? AIR : brick();   // 通路
+  return -1;
+}
+// 一番近い遺跡（周りの区画も見る）
+function nearestRuin(x, z) {
+  const i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
+  let best = null, bd = Infinity;
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+    const r = ruinOf((i + di) * RUIN_CELL + 1, (j + dj) * RUIN_CELL + 1), d = Math.hypot(r.x + 0.5 - x, r.z + 0.5 - z);
+    if (d < bd) { bd = d; best = r; }
+  }
+  return best;
+}
 function genDeep(cx, cz) {
   const d = new Uint8Array(CS * CS * H), I = (x, y, z) => (y * CS + z) * CS + x;
   for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
@@ -517,6 +555,13 @@ function genDeep(cx, cz) {
         if (dd > (r - 1) * (r - 1) + 1 && dd <= r * r + 1) put(mx + dx, top - 1, mz + dz, MUSH_CAP); // ふちが垂れる
       }
       for (let y = fy; y < top; y++) put(mx, y, mz, MUSH_STEM);
+    }
+  // 遺跡（最後に重ねるので、洞窟・水・キノコより優先）
+  const ru = ruinOf(cx * CS + 8, cz * CS + 8);
+  if (Math.abs(cx * CS + 8 - ru.x) <= 34 + 8 && Math.abs(cz * CS + 8 - ru.z) <= 34 + 8)
+    for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+      const wx = cx * CS + x, wz = cz * CS + z;
+      for (let y = 2; y <= RUIN_Y + 11; y++) { const b = ruinBlock(wx - ru.x, y, wz - ru.z, wx, wz); if (b >= 0) d[I(x, y, z)] = b; }
     }
   return finishChunk(d, cx, cz);
 }
@@ -817,6 +862,16 @@ const WHITE = [1, 1, 1];
   set(EMBER_ORE, mk(deepOreF([236, 90, 32], [255, 214, 120])));
   set(VOID_ORE, mk(deepOreF([150, 90, 236], [236, 210, 255])));
   set(LAMP, mk((x, y, s) => frame(x, y) || x === 7 || y === 7 ? [52, 52, 66] : sh([136, 222, 246], (R(x, y, s) - 0.5) * 30 + ((x + y) % 5 === 0 ? 34 : 0))));
+  // 遺跡: 青みがかった古い石
+  const ruinF = (x, y, s) => { const row = y >> 2; return y % 4 === 3 || (x + (row % 2) * 4) % 8 === 7 ? [44, 52, 58] : sh([98, 112, 118], (R((x + row * 4) >> 3, row, s) - 0.5) * 18 + (R(x, y, s + 1) - 0.5) * 10); };
+  set(RUIN_BRICK, mk(ruinF));
+  set(RUIN_CRACKED, mk((x, y, s) => { const c = Math.abs(x - 4 - Math.floor(y * 0.6)) === 0 || (y > 8 && Math.abs(x - 12 + ((y - 8) >> 1)) === 0); return c ? [30, 34, 38] : ruinF(x, y, s); }));
+  set(RUIN_PILLAR, mk(ringF([120, 134, 140], [104, 118, 124], [70, 80, 86])),
+    mk((x, y, s) => y === 2 || y === 13 ? [196, 166, 78] : x % 4 === 0 ? [70, 80, 86] : sh([116, 130, 136], (R(x, y >> 2, s) - 0.5) * 10)));
+  set(RUIN_RUNE, mk((x, y, s) => {
+    const g = (x === 7 || x === 8) && y >= 3 && y <= 12 || (y === 7 || y === 8) && x >= 3 && x <= 12 || Math.abs(Math.hypot(x - 7.5, y - 7.5) - 5) < 0.6;
+    return g ? [255, 222, 120] : frame(x, y) ? [44, 52, 58] : sh([60, 70, 78], (R(x, y, s) - 0.5) * 12);
+  }));
   set(CORE, mk((x, y, s) => R(x, y, s) > 0.93 ? [70, 96, 150] : sh([26, 26, 34], (R(x >> 1, y >> 1, s + 1) - 0.5) * 22)));   // ほぼ黒に青い粒
   set(PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.3 + Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.4 ? [255, 170, 60] : w > -0.3 ? [214, 84, 30] : [70, 20, 16]; }));   // 赤と橙の渦
   set(BOMB, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5); return d < 1.6 ? [236, 226, 196] : d < 3 ? [30, 28, 28] : frame(x, y) ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12); }),
@@ -1645,7 +1700,16 @@ function useItem() {
     launchArrow(P.x + d[0] * 0.4, eyeY() - 0.1, P.z + d[2] * 0.4, d[0] * 22, d[1] * 22 + 2, d[2] * 22, 0, 0, 1);
     refreshUI(); placeCd = 0.6; return;
   }
-  if (st && st.b === GUIDE_EYE) { toast('導きの目は、今はまだ使い道がない'); placeCd = 1.5; return; }
+  if (st && st.b === GUIDE_EYE) {   // 導きの目: 地底で使うと、一番近い遺跡の方へ飛んでいく。8割は落ちてきて拾える
+    placeCd = 1;
+    if (dim !== 1) { toast('ここでは、導きの目は何も示さない'); return; }
+    if (--st.n <= 0) slots[sel] = null;
+    refreshUI();
+    const r = nearestRuin(P.x, P.z), dx = r.x + 0.5 - P.x, dz = r.z + 0.5 - P.z, dist = Math.hypot(dx, dz) || 1;
+    eyes.push({ x: P.x, y: eyeY(), z: P.z, y0: eyeY(), dx: dx / dist, dz: dz / dist, go: Math.min(dist, 14), t: 0 });
+    if (dist < 14) toast('遺跡はすぐそこだ');
+    return;
+  }
   if (st && st.b === BOW) return;   // 弓は updateInteract で引きを数える
   if (st && st.b === BONE_MEAL && target) {   // 骨粉: 作物を一気に育てきる、苗木をその場で木にする
     const { x, y, z, b } = target;
@@ -2118,6 +2182,7 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  '導きの目: 地底で右クリックすると、一番近い遺跡の方へ飛んでいく（2割で砕ける）。遺跡の四隅にはチェストがある。',
   '地底: 深石の地下世界。灯晶石（石のツルハシ）・黒鉄鉱（鉄）・紅炎石（ダイヤ、深い所）・虚晶石（黒鉄、遺跡の近く）が採れる。全身そろえると 紅炎=爆発ダメージ半分＋殴った相手が燃える、虚晶=落下ダメージなし＋敵に気づかれにくい。',
   '地底への門: 一番下の岩盤を爆薬で吹き飛ばすと、時々岩盤ブロックが手に入る。それを地面に 5×5 の輪（真ん中 3×3 は空ける。四隅は無くてよい）に並べ、真ん中で爆薬を爆発させると門が開く。門の上に少し立つと移動する。',
   '爆薬: 置いて右クリックで点火、3秒後に周りのブロックごと爆発する。火薬はタルボムから。ワープ玉（カスミが落とす）は右クリックで投げると、落ちた場所へ移動する。',
@@ -3150,6 +3215,7 @@ function arriveGate(x, z) {
 let fxT = 0;                 // 見た目用の経過秒（点滅やふわふわに使う）
 const parts = [];            // 爆発の破片 { x,y,z, vx,vy,vz, life, col }
 const fuses = [];            // 火がついた爆薬 { x,y,z, t(残り秒), mine(自分が爆発させる) }
+const eyes = [];             // 飛んでいる導きの目 { x,y,z, y0, dx,dz(向き), go(進む距離), t }
 function boomFx(x, y, z, r) {
   const cols = [[1.0, 0.82, 0.25], [1.0, 0.55, 0.15], [0.35, 0.33, 0.32], [0.95, 0.95, 0.9]];
   for (let i = 0; i < 12 * r && parts.length < 150; i++) {
@@ -3216,6 +3282,18 @@ function blinkMob(m, cx, cy, cz, rmin, rmax) {
   return false;
 }
 function updateFx(dt) {
+  for (let i = eyes.length - 1; i >= 0; i--) {   // 導きの目: 2秒かけて遺跡の方へ進みながら少し上がり、止まって落ちる
+    const e = eyes[i], t0 = e.t;
+    e.t += dt;
+    const k = Math.min(e.t, 1.6) - Math.min(t0, 1.6);
+    e.x += e.dx * e.go / 1.6 * k; e.z += e.dz * e.go / 1.6 * k;
+    e.y = e.y0 + Math.min(e.t, 1.6) * 1.2 + Math.sin(e.t * 6) * 0.08;
+    if (Math.random() < dt * 20) parts.push({ x: e.x, y: e.y, z: e.z, vx: 0, vy: -0.5, vz: 0, life: 0.4, col: [0.55, 0.9, 0.86] });
+    if (e.t < 2.2) continue;
+    eyes.splice(i, 1);
+    if (Math.random() < 0.8) spawnItem(GUIDE_EYE, 1, e.x, e.y, e.z, 0, 1, 0, 0.5);
+    else { for (let k2 = 0; k2 < 12; k2++) parts.push({ x: e.x, y: e.y, z: e.z, vx: (Math.random() - 0.5) * 4, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 4, life: 0.6, col: [0.98, 0.84, 0.3] }); toast('導きの目は砕けた'); }
+  }
   fxT += dt;
   for (let i = parts.length - 1; i >= 0; i--) {
     const p = parts[i];
@@ -3237,6 +3315,10 @@ function drawFx() {
     if (boxes >= MAXCUBE - 20) break;
     const s = 0.1 + p.life * 0.3;
     o = pushBox(o, p.x, p.y, p.z, 0, [0, 0, 0], [s, s, s], [0, 0, 0], 0, p.col, p.col); boxes++;
+  }
+  for (const e of eyes) {   // 導きの目: 金色の玉が回る
+    if (boxes >= MAXCUBE) break;
+    o = pushBox(o, e.x, e.y, e.z, fxT * 5, [0, 0, 0], [0.24, 0.24, 0.24], [0, 0, 0], fxT * 3, [0.98, 0.84, 0.3], [0.2, 0.6, 0.62]); boxes++;
   }
   for (const fz of fuses) {   // 火のついた爆薬: 白と赤に点滅しながら少しふくらむ
     if (boxes >= MAXCUBE) break;

@@ -18,7 +18,7 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 72;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 76;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 8; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
@@ -31,6 +31,36 @@ for (let tier = 2; tier < 8; tier++) for (let part = 0; part < 4; part++) ITEM_I
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== CORE;   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
+// ---- 地底の遺跡（ブラウザの ruinOf / ruinBlock と同じ計算） ----
+// 遺跡のチェストは地形の一部なので edits に無い。場所を計算で見分けて、最初に開けた時に中身を入れる
+const RUIN_CELL = 320, RUIN_Y = 14;
+function hash2(x, z, s, sd) {
+  let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263) + Math.imul(s + sd, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h = Math.imul(h ^ (h >>> 15), 2246822519);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function isRuinChest(d, x, y, z) {
+  if (d !== 1 || y !== RUIN_Y) return false;
+  const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
+  const rx = i * RUIN_CELL + 64 + Math.floor(hash2(i, j, 860, sd) * 192), rz = j * RUIN_CELL + 64 + Math.floor(hash2(i, j, 861, sd) * 192);
+  return Math.abs(x - rx) === 9 && Math.abs(z - rz) === 9;
+}
+function ruinLoot() {
+  const sl = Array(27).fill(null), R = n => 1 + Math.floor(Math.random() * n);
+  const put = (b, n) => { let k; do k = Math.floor(Math.random() * 27); while (sl[k]); sl[k] = { b, n }; };
+  put(150, 2 + R(6));                              // 灯晶
+  put(151, R(4));                                  // 黒鉄インゴット
+  put(107, 1 + R(3));                              // パン
+  if (Math.random() < 0.5) put(152, R(3));         // 紅炎
+  if (Math.random() < 0.12) put(153, 1);           // 虚晶
+  if (Math.random() < 0.3) put(104, R(2));         // ダイヤ
+  if (Math.random() < 0.5) put(103, R(4));         // 金インゴット
+  if (Math.random() < 0.4) put(58, R(2));          // 爆薬
+  if (Math.random() < 0.3) put(149, 1);            // 導きの目
+  if (Math.random() < 0.5) put(143, R(4));         // 骨
+  return sl;
+}
 
 // ---------- ワールドの保存・読み込み ----------
 let seed = process.env.SEED ? Number(process.env.SEED) | 0 : (Math.random() * 1e9) | 0, tod = process.env.TOD ? Number(process.env.TOD) : 0.3;   // SEED を指定すると新規ワールドの地形を固定できる
@@ -201,6 +231,7 @@ const handlers = {
       if (b !== 0) sendTo(p.ws, { t: 'give', b, n: 1 });   // 置こうとしたブロックは返す
       return;
     }
+    if (cur === undefined && b !== CHEST && isRuinChest(curDim, x, y, z) && !chests.has(key)) chests.set(key, { slots: ruinLoot(), user: 0 });   // 開けずに壊した遺跡のチェストも中身を落とす
     edits.set(key, b); dirty = true;
     track(key, b);
     bDim({ t: 'set', x, y, z, b }, p.ws);
@@ -229,6 +260,7 @@ const handlers = {
       if (![x, y, z].every(Number.isInteger) || y < 1 || y >= H || !validBlock(b) || Math.abs(x) > WORLD_LIMIT || Math.abs(z) > WORLD_LIMIT) continue;
       const key = kOf(x, y, z), cur = edits.get(key);
       if (cur !== undefined && cur !== was) { sendTo(p.ws, { t: 'set', x, y, z, b: cur }); continue; }
+      if (cur === undefined && b !== CHEST && isRuinChest(curDim, x, y, z) && !chests.has(key)) chests.set(key, { slots: ruinLoot(), user: 0 });
       edits.set(key, b); dirty = true; track(key, b);
       ok.push([x, y, z, b]);
       const ch = chests.get(key);
@@ -245,9 +277,10 @@ const handlers = {
     const { x, y, z } = m;
     if (![x, y, z].every(Number.isInteger)) return;
     const key = kOf(x, y, z);
-    if (edits.get(key) !== CHEST || (p.x - x) ** 2 + (p.z - z) ** 2 > 100) return;
+    const ruin = !edits.has(key) && isRuinChest(curDim, x, y, z);   // まだ誰も触っていない遺跡のチェスト
+    if ((edits.get(key) !== CHEST && !ruin) || (p.x - x) ** 2 + (p.z - z) ** 2 > 100) return;
     let ch = chests.get(key);
-    if (!ch) { ch = { slots: Array(27).fill(null), user: 0 }; chests.set(key, ch); }
+    if (!ch) { ch = { slots: ruin ? ruinLoot() : Array(27).fill(null), user: 0 }; chests.set(key, ch); dirty = true; }
     if (ch.user && ch.user !== p.id && players.has(ch.user)) { sendTo(p.ws, { t: 'cbusy' }); return; }
     for (const c of chests.values()) if (c.user === p.id) c.user = 0;   // 前に開いていた物は閉じた扱い
     ch.user = p.id;
