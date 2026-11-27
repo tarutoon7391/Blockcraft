@@ -295,7 +295,16 @@ const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
 // ---------- ノイズ・バイオーム ----------
-let seed = 0;   // サーバーから受け取る
+let seed = 0;   // 地形のノイズに使う値（世界ごとに変える）
+// ---------- 世界（ディメンション） ----------
+// 0=地上。1・2 は別世界の土台（地形は仮。入口になるポータルはまだ無く、チャットで /dim 番号 と打つと移れる）
+// sky・light: 昼夜が無い世界の空の色と明るさ。nosky: 太陽・月・空からの光を使わない。void: 底が抜けていて落ちると倒れる
+const DIMS = [
+  { name: '地上' },
+  { name: '地底（仮）', sky: [0.16, 0.05, 0.04], light: [0.66, 0.56, 0.52], nosky: true },
+  { name: '虚空（仮）', sky: [0.03, 0.02, 0.07], light: [0.80, 0.78, 0.88], nosky: true, void: true },
+];
+let dim = 0, worldSeed = 0;   // 今いる世界と、サーバーから受け取ったワールドのシード
 function hash(x, z, s) {
   let h = (Math.imul(x, 374761393) + Math.imul(z, 668265263) + Math.imul(s + seed, 1442695041)) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -374,7 +383,45 @@ function topOf(h, bi) {
 const chunks = new Map();
 const edits = new Map();   // プレイヤーが変えたブロック（チャンク再生成後も残す）
 const ckey = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
+// 別世界の地形（仮）。地上の genChunk と同じ形（ブロックの配列＋ bio ＋ top）で返す
+function finishChunk(d, cx, cz) {
+  d.bio = new Uint8Array(CS * CS);
+  const e = edits.get(ckey(cx, cz));
+  if (e) for (const [i, b] of e) d[i] = b;
+  d.top = new Uint8Array(CS * CS);
+  for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) calcTop(d, x, z);
+  return d;
+}
+// 地底: 天井と床が岩盤で、石の中に大きな空洞が広がる。(8,8) の周りに到着用の小部屋
+function genDeep(cx, cz) {
+  const d = new Uint8Array(CS * CS * H);
+  for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+    const wx = cx * CS + x, wz = cz * CS + z, room = Math.abs(wx - 8) <= 3 && Math.abs(wz - 8) <= 3;
+    for (let y = 0; y < H; y++) {
+      let b = STONE;
+      if (y === 0 || y >= H - 2) b = BEDROCK;
+      else if (room && y >= 20 && y <= 23) b = AIR;
+      else if (room && y === 19) b = COBBLE;
+      else if (y > 2 && y < H - 4 && vnoise3(wx * 0.04, y * 0.07, wz * 0.04, 800) > 0.53) b = AIR;
+      d[(y * CS + z) * CS + x] = b;
+    }
+  }
+  return finishChunk(d, cx, cz);
+}
+// 虚空: 何も無い空間に、(8,8) を中心にした浮き島が1つ
+function genVoid(cx, cz) {
+  const d = new Uint8Array(CS * CS * H);
+  for (let z = 0; z < CS; z++) for (let x = 0; x < CS; x++) {
+    const wx = cx * CS + x, wz = cz * CS + z, r = Math.hypot(wx - 8, wz - 8);
+    if (r > 60) continue;
+    const n = fbm(wx * 0.05, wz * 0.05, 810, 3), top = 30 + Math.floor(n * 5), thick = Math.floor((46 - r) * 0.45 + n * 8 - 2);
+    for (let y = Math.max(1, top - thick); y <= top && thick > 0; y++) d[(y * CS + z) * CS + x] = SANDSTONE;
+  }
+  return finishChunk(d, cx, cz);
+}
 function genChunk(cx, cz) {
+  if (dim === 1) return genDeep(cx, cz);
+  if (dim === 2) return genVoid(cx, cz);
   const d = new Uint8Array(CS * CS * H);
   const M = 2, W = CS + M * 2, hm = new Int16Array(W * W), bm = new Uint8Array(W * W);
   for (let z = 0; z < W; z++) for (let x = 0; x < W; x++) {
@@ -461,6 +508,7 @@ function genChunk(cx, cz) {
   return d;
 }
 function calcTop(d, x, z) {
+  if (DIMS[dim].nosky) { d.top[z * CS + x] = 0; return; }   // 空の無い世界は、深さで暗くしない（全体が同じ明るさ）
   let y = H - 1;
   while (y > 0 && !opaque(d[(y * CS + z) * CS + x])) y--;
   d.top[z * CS + x] = y;
@@ -476,7 +524,7 @@ function getChunk(cx, cz) {
   return c;
 }
 function getBlock(x, y, z) {
-  if (y < 0) return BEDROCK;
+  if (y < 0) return DIMS[dim].void ? AIR : BEDROCK;   // 虚空の世界だけは底が抜けている
   if (y >= H) return AIR;
   return getChunk(x >> 4, z >> 4)[(y * CS + (z & 15)) * CS + (x & 15)];
 }
@@ -1181,7 +1229,8 @@ const P = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, yaw: 0, pitch: -0.15, ground:
 const eyeY = () => P.y + EYE - P.crouch * 0.14;
 function spawn() {
   let x = 8, z = 8;
-  for (let i = 0; i < 400 && heightAt(x, z) <= SEA + 1; i++) { x += 7; z += 3; }
+  if (dim === 1) { P.x = 8.5; P.y = 20; P.z = 8.5; P.vx = P.vy = P.vz = 0; return; }   // 地底: 到着用の小部屋
+  if (dim === 0) for (let i = 0; i < 400 && heightAt(x, z) <= SEA + 1; i++) { x += 7; z += 3; }
   P.x = x + 0.5; P.z = z + 0.5; P.vx = P.vy = P.vz = 0;
   let y = H - 1;
   while (y > 0 && !solid(getBlock(x, y, z))) y--;
@@ -1270,6 +1319,7 @@ function damage(v, cause) {
   drawStats();
 }
 function updateStats(dt) {
+  if (P.y < -24) { P.inv = 0; damage(100, '奈落'); }   // 虚空の世界で島から落ちた
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
   if (P.land > 0) { if (!inWater) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
   // スタミナ: ダッシュをやめて1秒たつと回復。使い切ると4まで戻るまでダッシュ不可
@@ -1492,7 +1542,7 @@ function toast(text) { toastEl.textContent = text; toastEl.style.opacity = 1; se
 let sleeping = false;
 const nightNow = () => tod > 0.76 || tod < 0.24;
 function useBed(t) {
-  P.bed = { x: t.x, y: t.y, z: t.z };
+  P.bed = { x: t.x, y: t.y, z: t.z, dim };
   saveLocal();
   if (!nightNow()) { toast('復活地点をこのベッドにした（寝られるのは夜だけ）'); return; }
   sleeping = true; $('sleep').style.display = 'flex';
@@ -1508,7 +1558,7 @@ function wake(silent) {
 // 倒れた時の戻り先。ベッドが残っていればそこ、無ければスタート地点
 function respawn() {
   const b = P.bed;
-  if (b && getBlock(b.x, b.y, b.z) === BED && !collides(b.x + 0.5, b.y, b.z + 0.5)) {
+  if (b && (b.dim || 0) === dim && getBlock(b.x, b.y, b.z) === BED && !collides(b.x + 0.5, b.y, b.z + 0.5)) {
     P.x = b.x + 0.5; P.y = b.y; P.z = b.z + 0.5; P.vx = P.vy = P.vz = 0;
     return true;
   }
@@ -2097,7 +2147,7 @@ addEventListener('keydown', e => {
   if (!started) return;
   if (chatOpen) {   // 日本語入力の変換確定の Enter では送信しない
     if (e.isComposing || e.keyCode === 229) return;
-    if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); const text = chatIn.value.trim(); if (text) send({ t: 'chat', text }); closeChat(); }
+    if (e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); const text = chatIn.value.trim(); if (text) sendChat(text); closeChat(); }
     else if (e.code === 'Escape') closeChat();
     return;
   }
@@ -2180,7 +2230,7 @@ tbtn('tsneak', () => { joy.sneak = !joy.sneak; $('tsneak').classList.toggle('on'
   form.addEventListener('submit', e => {
     e.preventDefault();
     if (!chatOpen) return;
-    const text = chatIn.value.trim(); if (text) send({ t: 'chat', text });
+    const text = chatIn.value.trim(); if (text) sendChat(text);
     closeChat();
   });
 }
@@ -2204,6 +2254,36 @@ function netApply(x, y, z, b) {
   else recEdit(x, y, z, b);
 }
 // 自分のブロック変更: 手元で即反映して、サーバーに知らせる
+// 世界に入る（最初の参加と、世界を移った時）。今の世界の物を全部捨てて、受け取った中身に入れ替える
+let pendingPos = null;
+function enterDim(m, pos) {
+  for (const ms of meshes.values()) freeMesh(ms);
+  meshes.clear(); chunks.clear(); edits.clear(); lastKey = -1;
+  items.length = 0; mobs.clear(); arrows.length = 0; fuses.length = 0; parts.length = 0;
+  if (invOpen) closeInv();
+  wake(true);
+  dim = m.dim; seed = (worldSeed + dim * 7919) | 0;
+  for (const [x, y, z, b] of m.edits) recEdit(x, y, z, b);
+  for (const it of m.items) items.push(it);
+  for (const mb of m.mobs) addMob(mb);
+  for (const p of m.players) {   // 他の人: 同じ世界にいる人だけ位置を出す
+    const o = others.get(p.id);
+    if (!o) continue;
+    o.dim = p.dim;
+    if (p.dim === dim && p.y > -50) { o.x = o.tx = p.x; o.y = o.ty = p.y; o.z = o.tz = p.z; } else o.ty = o.y = -100;
+  }
+  if (!pos && dim === 0 && P.back) pos = P.back;
+  if (pos && !collides(pos.x, pos.y, pos.z)) { P.x = pos.x; P.y = pos.y; P.z = pos.z; } else spawn();
+  P.vx = P.vy = P.vz = 0; P.land = 0; P.kbx = P.kbz = 0; lastPos = '';
+}
+// チャット欄の入力を送る。「/dim 番号」は世界の移動（ポータルができるまでの仮の入口）
+function sendChat(text) {
+  const mm = /^\/dim\s+([0-2])$/.exec(text);
+  if (!mm) { send({ t: 'chat', text }); return; }
+  if (+mm[1] === dim) { toast('もう ' + DIMS[dim].name + ' にいる'); return; }
+  if (dim === 0) P.back = { x: P.x, y: P.y, z: P.z };   // 地上を離れる時、戻る場所を覚えておく
+  send({ t: 'dim', d: +mm[1] });
+}
 function netSet(x, y, z, b, was, drop) {
   setBlock(x, y, z, b);
   send({ t: 'set', x, y, z, b, was, drop });
@@ -2217,16 +2297,14 @@ function addOther(p) {
   const el = document.createElement('div'); el.className = 'tag'; el.textContent = p.name;
   $('names').appendChild(el);
   others.set(p.id, { name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw || 0, pitch: p.pitch || 0,
-    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, eq: p.eq || '0000', phase: 0, speed: 0, hurt: 0, el });
+    tx: p.x, ty: p.y, tz: p.z, tyaw: p.yaw || 0, tpitch: p.pitch || 0, sn: p.sn || 0, eq: p.eq || '0000', dim: p.dim || 0, phase: 0, speed: 0, hurt: 0, el });
 }
 const NET = {
   init(m) {
-    myId = m.id; seed = m.seed; tod = m.tod;
-    for (const [x, y, z, b] of m.edits) recEdit(x, y, z, b);
+    myId = m.id; worldSeed = m.seed; tod = m.tod;
     for (const p of m.players) addOther(p);
-    for (const it of m.items) items.push(it);
-    for (const mb of m.mobs) addMob(mb);
-    spawn(); loadLocal(); refreshUI();
+    enterDim(m);
+    loadLocal(); refreshUI();
     online = true; started = true; startEl.style.display = 'none';
     setInterval(saveLocal, 5000);
     addChat('', 'ワールドに参加した（Enter でチャット）');
@@ -2245,6 +2323,8 @@ const NET = {
       o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.tpitch = pitch; o.sn = sn; o.eq = eq || '0000';
     }
   },
+  dim(m) { enterDim(m, pendingPos); pendingPos = null; toast(DIMS[dim].name + ' に来た'); },
+  pdim(m) { const o = others.get(m.id); if (o) { o.dim = m.dim; o.ty = o.y = -100; } },   // 誰かが世界を移った（次の位置報告が来るまで隠す）
   set(m) { netApply(m.x, m.y, m.z, m.b); },
   sets(m) { batch(() => { for (const [x, y, z, b] of m.l) netApply(x, y, z, b); }); },
   grow(m) { growTree(m.x, m.y, m.z); },
@@ -2355,11 +2435,11 @@ $('rejoin').addEventListener('click', () => { try { sessionStorage.removeItem('b
 // サーバーからは5秒ごとに時刻が届く。25秒なにも届かなければ、切れているとみなす（スリープ復帰など）
 setInterval(() => { if (online && Date.now() - lastMsg > 25000) connectionLost(); }, 5000);
 // 持ち物・位置・体力はブラウザに保存（ワールド×名前ごと）。同じブラウザで同じ名前で入り直すと続きから
-const saveKey = () => 'blockcraft-save-' + seed + '-' + myName;
+const saveKey = () => 'blockcraft-save-' + worldSeed + '-' + myName;
 function saveLocal() {
   if (!myId || kicked) return;   // 別タブに切り替わった後は、古いタブから上書きしない
   try {
-    localStorage.setItem(saveKey(), JSON.stringify({ slots: slots.slice(0, 54), held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, bed: P.bed }));
+    localStorage.setItem(saveKey(), JSON.stringify({ slots: slots.slice(0, 54), held, sel, x: P.x, y: P.y, z: P.z, yaw: P.yaw, pitch: P.pitch, hp: P.hp, bed: P.bed, dim, back: P.back }));
   } catch (e) {}
 }
 function loadLocal() {
@@ -2367,7 +2447,7 @@ function loadLocal() {
   try {
     let raw = localStorage.getItem(saveKey());
     if (raw == null) {   // 名前ごとに分ける前の保存（blockcraft-save-<seed>）があれば、この名前に引き継ぐ
-      const old = 'blockcraft-save-' + seed;
+      const old = 'blockcraft-save-' + worldSeed;
       raw = localStorage.getItem(old);
       if (raw != null) { localStorage.setItem(saveKey(), raw); localStorage.removeItem(old); }
     }
@@ -2380,7 +2460,12 @@ function loadLocal() {
   for (let i = 0; i < 42; i++) slots[i] = ok(s.slots[i]) ? s.slots[i] : null;
   for (const st of s.slots.slice(42).concat([s.held])) if (ok(st)) insert(st, STORE.concat(HOTBAR));   // クラフト枠に残っていた分
   if (Number.isInteger(s.sel) && s.sel >= 0 && s.sel < 9) sel = s.sel;
-  if ([s.x, s.y, s.z].every(Number.isFinite) && !collides(s.x, s.y, s.z)) {
+  if (s.back && [s.back.x, s.back.y, s.back.z].every(Number.isFinite)) P.back = s.back;
+  if (s.dim === 1 || s.dim === 2) {   // 別世界で保存していた: いったん地上で入ってから、その世界へ移り直す
+    if ([s.x, s.y, s.z].every(Number.isFinite)) pendingPos = { x: s.x, y: s.y, z: s.z };
+    P.yaw = s.yaw || 0; P.pitch = s.pitch || 0;
+    send({ t: 'dim', d: s.dim });
+  } else if ([s.x, s.y, s.z].every(Number.isFinite) && !collides(s.x, s.y, s.z)) {
     P.x = s.x; P.y = s.y; P.z = s.z; P.yaw = s.yaw || 0; P.pitch = s.pitch || 0;
   }
   if (s.hp > 0 && s.hp <= 20) P.hp = s.hp;
@@ -2960,6 +3045,8 @@ function skyState() {
     curSky[i] = c + (glow[i] - c) * dusk;
     curLight[i] = dark[i] + (1 - dark[i]) * f;
   }
+  const D = DIMS[dim];
+  if (D.sky) for (let i = 0; i < 3; i++) { curSky[i] = D.sky[i]; curLight[i] = D.light[i]; }   // 昼夜の無い世界
   const l = Math.hypot(1, 0.3);
   sunDir[0] = Math.cos(a) / l; sunDir[1] = Math.sin(a) / l; sunDir[2] = 0.3 / l;
 }
@@ -2995,7 +3082,7 @@ function render() {
   gl.uniform3f(uEye, P.x, ey, P.z);
   gl.uniform3f(uSky, curSky[0], curSky[1], curSky[2]);
   gl.disable(gl.BLEND);
-  drawSunMoon(P.x, ey, P.z);
+  if (!DIMS[dim].nosky) drawSunMoon(P.x, ey, P.z);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE);
   gl.uniform3f(uLight, curLight[0], curLight[1], curLight[2]);
   gl.uniform2f(uFog, RD * CS * 0.55, RD * CS - 6);
@@ -3011,6 +3098,7 @@ function render() {
   waterEl.style.opacity = getBlock(Math.floor(P.x), Math.floor(ey), Math.floor(P.z)) === WATER ? 0.45 : 0;
 }
 function placeName() {
+  if (dim) return DIMS[dim].name;
   const x = Math.floor(P.x), z = Math.floor(P.z), h = heightAt(x, z);
   if (h >= 44) return '山岳';
   if (h < SEA) return '水辺';
