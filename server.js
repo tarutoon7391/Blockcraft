@@ -18,11 +18,12 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, MAX_BLOCK = 57;   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, MAX_BLOCK = 58;   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
-for (let i = 130; i <= 146; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
+ITEM_IDS.add(BOMB);   // 爆薬
+for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 5; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== BEDROCK;   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
@@ -88,7 +89,9 @@ let nextPlayer = 1, nextItem = 1, nextMob = 1;
 const MOB_DEF = {
   zombie: { hp: 20, hostile: true, atk: 3, name: 'ゾンビ', drop: [126, 0, 1], rare: [138, 139] },
   spider: { hp: 16, hostile: true, atk: 2, name: 'クモ', drop: [141, 0, 2] },                               // 糸
-  skeleton: { hp: 20, hostile: true, atk: 3, name: '骨の射手', drop: [143, 0, 2], extra: [145, 0, 2] },   // 骨と矢   // rare: 15% で代わりに落とす物（にんじん・じゃがいも）
+  skeleton: { hp: 20, hostile: true, atk: 3, name: 'スケルトン', drop: [143, 0, 2], extra: [145, 0, 2], bonus: [146, 0.08, 120] },   // bonus: [物, 確率, 耐久] 8% で使い古しの弓
+  boomer: { hp: 20, hostile: true, atk: 0, name: 'タルボム', drop: [147, 0, 2] },   // 火薬（倒した時だけ。爆発されたら落とさない）
+  wisp: { hp: 30, hostile: true, atk: 5, name: 'カスミ', drop: [148, 0, 1] },        // ワープ玉   // 骨と矢   // rare: 15% で代わりに落とす物（にんじん・じゃがいも）
   pig: { hp: 10, drop: [120, 1, 2] },
   cow: { hp: 10, drop: [122, 1, 2] },
   chicken: { hp: 4, drop: [124, 1, 1], extra: [142, 0, 2] },   // 肉と羽
@@ -115,6 +118,20 @@ const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u00
 
 // 育ち途中の作物か（小麦 25〜27、にんじん 50〜52、じゃがいも 54〜56。それぞれ次の番号が1段階先）
 const growing = b => (b >= WHEAT0 && b < WHEAT3) || (b >= 50 && b <= 52) || (b >= 54 && b <= 56);
+// モブを倒した: 全員から消して、ドロップを出す
+function killMob(mob, by) {
+  mobs.delete(mob.id);
+  broadcast({ t: 'mrm', id: mob.id });
+  const def = MOB_DEF[mob.kind], [item, lo, hi] = def.drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
+  const rareHit = def.rare && Math.random() < 0.15;
+  if (rareHit) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, by);
+  if (def.extra) {   // 2種類目のドロップ
+    const k = def.extra[1] + Math.floor(Math.random() * (def.extra[2] - def.extra[1] + 1));
+    if (k > 0) spawnItem({ b: def.extra[0], n: k, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0.8, vy: 2.5, vz: 0, delay: 0.4 }, by);
+  }
+  if (!rareHit && n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, by);
+  if (def.bonus && Math.random() < def.bonus[1]) spawnItem({ b: def.bonus[0], n: 1, d: def.bonus[2], x: mob.x, y: mob.y + 0.3, z: mob.z, vx: -0.8, vy: 2.5, vz: 0, delay: 0.4 }, by);
+}
 // 作物・苗木の場所を覚えておく（成長させる対象）
 function track(key, b) {
   if (growing(b)) crops.add(key); else crops.delete(key);
@@ -163,7 +180,7 @@ const handlers = {
   sets(p, m) {
     if (!Array.isArray(m.l)) return;
     const ok = [];
-    for (const e of m.l.slice(0, 100)) {
+    for (const e of m.l.slice(0, 400)) {   // 爆発で一度に数百マス消えることがある
       if (!Array.isArray(e)) continue;
       const [x, y, z, b, was] = e;
       if (![x, y, z].every(Number.isInteger) || y < 1 || y >= H || !validBlock(b) || Math.abs(x) > WORLD_LIMIT || Math.abs(z) > WORLD_LIMIT) continue;
@@ -171,6 +188,11 @@ const handlers = {
       if (cur !== undefined && cur !== was) { sendTo(p.ws, { t: 'set', x, y, z, b: cur }); continue; }
       edits.set(key, b); dirty = true; track(key, b);
       ok.push([x, y, z, b]);
+      const ch = chests.get(key);
+      if (ch && b !== CHEST) {   // 爆発などでチェストが消えた → 中身を落とす
+        chests.delete(key);
+        for (const st of ch.slots) if (st) spawnItem({ b: st.b, n: st.n, d: st.d, x: x + 0.5, y: y + 0.3, z: z + 0.5, vx: (Math.random() - 0.5) * 2, vy: 2.5, vz: (Math.random() - 0.5) * 2, delay: 0.4 }, p.id);
+      }
     }
     if (ok.length) broadcast({ t: 'sets', l: ok }, p.ws);
   },
@@ -264,16 +286,7 @@ const handlers = {
     if (!mob || !num(m.dmg)) return;
     mob.hp -= Math.max(1, Math.min(12, Math.floor(m.dmg)));
     if (mob.hp > 0) { broadcast({ t: 'mhurt', id: mob.id, kx: clampK(m.kx), kz: clampK(m.kz) }); return; }
-    mobs.delete(mob.id);
-    broadcast({ t: 'mrm', id: mob.id });
-    const def = MOB_DEF[mob.kind], [item, lo, hi] = def.drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
-    const rareHit = def.rare && Math.random() < 0.15;
-    if (rareHit) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
-    if (def.extra) {   // 2種類目のドロップ
-      const k = def.extra[1] + Math.floor(Math.random() * (def.extra[2] - def.extra[1] + 1));
-      if (k > 0) spawnItem({ b: def.extra[0], n: k, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0.8, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
-    }
-    if (!rareHit && n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, p.id);
+    killMob(mob, p.id);
   },
   // ゾンビが誰かを殴った（ゾンビを動かしているブラウザからの報告）
   mattack(p, m) {
@@ -286,7 +299,28 @@ const handlers = {
   // 矢を撃った（他の人の画面にも同じ矢を飛ばすための合図。当たり判定は撃った側がやる）
   shoot(p, m) {
     if (![m.x, m.y, m.z, m.vx, m.vy, m.vz].every(num) || dist2(p, m) > 40 * 40) return;
-    broadcast({ t: 'arrow', x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz }, p.ws);
+    broadcast({ t: 'arrow', x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, k: m.k === 1 ? 1 : 0 }, p.ws);
+  },
+  // 爆発した（タルボム・爆薬）。壊すブロックは sets で別に届く。ここでは合図を配って、巻き込まれたモブにダメージを与える。
+  // プレイヤーへのダメージは、合図を受けた各自のブラウザが自分との距離で計算する
+  boom(p, m) {
+    if (![m.x, m.y, m.z, m.r].every(num) || m.r < 1 || m.r > 5 || dist2(p, m) > 64 * 64) return;
+    broadcast({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r }, p.ws);
+    const self = mobs.get(m.mob);
+    if (self && self.owner === p.id && self.kind === 'boomer') { mobs.delete(self.id); broadcast({ t: 'mrm', id: self.id }); }   // 自爆したタルボム（何も落とさない）
+    const R = m.r * 1.8;
+    for (const mob of [...mobs.values()]) {
+      const d = Math.hypot(mob.x - m.x, mob.y - m.y, mob.z - m.z);
+      if (d >= R) continue;
+      mob.hp -= Math.ceil(24 * (1 - d / R));
+      if (mob.hp <= 0) killMob(mob, p.id);
+      else broadcast({ t: 'mhurt', id: mob.id, kx: clampK((mob.x - m.x) / (d || 1) * 6), kz: clampK((mob.z - m.z) / (d || 1) * 6) });
+    }
+  },
+  // 爆薬に火がついた（他の人の画面にも点滅する爆薬を見せる）
+  fuse(p, m) {
+    if (![m.x, m.y, m.z].every(Number.isInteger) || !num(m.s) || m.s < 0 || m.s > 5) return;
+    broadcast({ t: 'fuse', x: m.x, y: m.y, z: m.z, s: m.s }, p.ws);
   },
   died(p, m) {
     const cause = clean(m.cause, 20);
@@ -307,6 +341,7 @@ const handlers = {
       const mob = mobs.get(e[0]);
       if (!mob || mob.owner !== p.id || !e.slice(1, 5).every(num)) continue;
       mob.x = e[1]; mob.y = e[2]; mob.z = e[3]; mob.yaw = e[4]; mob.moved = true;
+      mob.f = num(e[5]) ? e[5] : 0;   // タルボムの導火線の進み具合
     }
   },
 };
@@ -318,7 +353,7 @@ const handlers = {
 const RATE = {
   pos: [20, 40], mobs: [20, 40], set: [60, 120], pick: [30, 60], rest: [10, 30], drop: [10, 40],
   hit: [8, 16], mhit: [8, 16], mattack: [10, 20], spawn: [2, 10], died: [1, 3],
-  sets: [2, 6], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
+  sets: [6, 20], sleep: [2, 6], shear: [4, 8], shoot: [8, 16], boom: [4, 12], fuse: [8, 20], copen: [4, 8], cput: [30, 60], cclose: [4, 8],
 };
 const DEFAULT_RATE = [30, 60];
 const WORLD_LIMIT = 500000;   // これより遠い座標のブロック変更は受け付けない（クライアントのチャンク番号が壊れる範囲）
@@ -375,7 +410,7 @@ wss.on('connection', ws => {
         edits: [...edits].map(([k, b]) => { const [x, y, z] = k.split(',').map(Number); return [x, y, z, b]; }),
         players: [...players.values()].map(q => ({ id: q.id, name: q.name, x: q.x, y: q.y, z: q.z, yaw: q.yaw, pitch: q.pitch, sn: q.sn, eq: q.eq })),
         items: [...items.values()].map(({ born, ...it }) => ({ ...it, age: (now - born) / 1000 })),
-        mobs: [...mobs.values()].map(({ moved, shearAt, ...mb }) => mb),
+        mobs: [...mobs.values()].map(({ moved, shearAt, f, ...mb }) => mb),
       });
       players.set(p.id, p);
       broadcast({ t: 'join', id: p.id, name: p.name }, ws);
@@ -403,7 +438,7 @@ setInterval(() => {
   for (const p of players.values()) if (p.moved) { p.moved = false; l.push([p.id, p.x, p.y, p.z, p.yaw, p.pitch, p.sn, p.eq]); }
   if (l.length) broadcast({ t: 'ps', l });
   const ml = [];
-  for (const m of mobs.values()) if (m.moved) { m.moved = false; ml.push([m.id, m.x, m.y, m.z, m.yaw]); }
+  for (const m of mobs.values()) if (m.moved) { m.moved = false; ml.push([m.id, m.x, m.y, m.z, m.yaw, m.f || 0]); }
   if (ml.length) broadcast({ t: 'ms', l: ml });
 }, 100);
 // モブの管理: 担当の割り当て、湧かせる依頼、朝になったらゾンビを消す
@@ -424,7 +459,7 @@ setInterval(() => {
   for (const p of ps) {
     let z = 0, a = 0;
     for (const m of mobs.values()) if (dist2(m, p) < 64 * 64) { if (MOB_DEF[m.kind].hostile) z++; else a++; }
-    if (night && z < 5) { const r = Math.random(); sendTo(p.ws, { t: 'wantspawn', kind: r < 0.5 ? 'zombie' : r < 0.75 ? 'spider' : 'skeleton' }); }
+    if (night && z < 5) { const r = Math.random(); sendTo(p.ws, { t: 'wantspawn', kind: r < 0.4 ? 'zombie' : r < 0.6 ? 'spider' : r < 0.8 ? 'skeleton' : r < 0.92 ? 'boomer' : 'wisp' }); }   // ゾンビ4割・クモ2割・スケルトン2割・タルボム1.2割・カスミ0.8割
     else if (!night && a < 6) sendTo(p.ws, { t: 'wantspawn', kind: ANIMALS[Math.floor(Math.random() * ANIMALS.length)] });
   }
 }, FAST ? 300 : 3000);
