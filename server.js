@@ -18,14 +18,14 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, MAX_BLOCK = 58;   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 60;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 5; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
 ITEM_IDS.add(BOMB);   // 爆薬
 for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 5; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
-const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== BEDROCK;   // 水(5)はバケツで置ける
+const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== CORE;   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
 const validItem = b => (validBlock(b) && b !== 0 && b !== WATER && b < 24) || ITEM_IDS.has(b);
 const num = v => typeof v === 'number' && Number.isFinite(v);
 
@@ -333,7 +333,8 @@ const handlers = {
   // プレイヤーへのダメージは、合図を受けた各自のブラウザが自分との距離で計算する
   boom(p, m) {
     if (![m.x, m.y, m.z, m.r].every(num) || m.r < 1 || m.r > 5 || dist2(p, m) > 64 * 64) return;
-    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r }, p.ws);
+    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, fake: m.fake ? 1 : 0 }, p.ws);
+    if (m.fake) return;   // 門が開く時の見た目だけの爆発: モブにもダメージなし
     const self = mobs.get(m.mob);
     if (self && self.owner === p.id && self.kind === 'boomer') { mobs.delete(self.id); broadcast({ t: 'mrm', id: self.id }); }   // 自爆したタルボム（何も落とさない）
     const R = m.r * 1.8;

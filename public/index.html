@@ -150,7 +150,8 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   WOOL = 34, BED = 35, IRON_BLOCK = 36, GOLD_BLOCK = 37, DIAMOND_BLOCK = 38, COAL_BLOCK = 39, STONE_BRICK = 40,
   GLASS = 41, CLAY = 42, BRICK = 43, SAPLING = 44,
   CHEST = 45, CAKE0 = 46, CAKE3 = 49,              // ケーキは 46〜49（食べるたびに1つ進む。46 が丸ごと）
-  CARROT0 = 50, CARROT3 = 53, POTATO0 = 54, POTATO3 = 57, BOMB = 58;   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
+  CARROT0 = 50, CARROT3 = 53, POTATO0 = 54, POTATO3 = 57, BOMB = 58,
+  CORE = 59, PORTAL = 60;   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
@@ -291,6 +292,8 @@ TOOLS[BOW] = { type: 'bow', tier: 0, speed: 1, dur: 384, lvl: 0, dmg: 1 };   // 
 // ---- 爆発する敵・ワープする敵（第5弾） ----
 Object.assign(NAME, { [BOMB]: '爆薬', [GUNPOWDER]: '火薬', [WARP_ORB]: 'ワープ玉', [GUIDE_EYE]: '導きの目' });
 HARD[BOMB] = 0.5;
+Object.assign(NAME, { [CORE]: '深層岩', [PORTAL]: '門' });
+HARD[CORE] = Infinity; HARD[PORTAL] = 0.6;
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -399,7 +402,8 @@ function genDeep(cx, cz) {
     const wx = cx * CS + x, wz = cz * CS + z, room = Math.abs(wx - 8) <= 3 && Math.abs(wz - 8) <= 3;
     for (let y = 0; y < H; y++) {
       let b = STONE;
-      if (y === 0 || y >= H - 2) b = BEDROCK;
+      if (y === 0 || y === H - 1) b = CORE;
+      else if (y === 1 || y === H - 2) b = BEDROCK;
       else if (room && y >= 20 && y <= 23) b = AIR;
       else if (room && y === 19) b = COBBLE;
       else if (y > 2 && y < H - 4 && vnoise3(wx * 0.04, y * 0.07, wz * 0.04, 800) > 0.53) b = AIR;
@@ -435,7 +439,7 @@ function genChunk(cx, cz) {
     const sub = top === GRASS || top === SNOWGRASS ? DIRT : top === SAND ? SAND : STONE;
     const ss = top === SAND && bi === B_DESERT && h > SEA + 1;
     for (let y = 0; y <= h; y++)
-      d[(y * CS + z) * CS + x] = y === 0 ? BEDROCK : y === h ? top : y >= h - 3 ? sub : (ss && y >= h - 7) ? SANDSTONE : STONE;
+      d[(y * CS + z) * CS + x] = y === 0 ? CORE : y === 1 ? BEDROCK : y === h ? top : y >= h - 3 ? sub : (ss && y >= h - 7) ? SANDSTONE : STONE;
     // 洞窟を掘る（水辺の地表近くは水が宙に浮くので掘らない）
     const ymax = h <= SEA + 1 ? h - 5 : h;
     for (let y = 2; y <= ymax; y++) if (isCave(cx * CS + x, y, cz * CS + z, y > h - 4 ? 0.35 : 1)) d[(y * CS + z) * CS + x] = AIR;
@@ -524,7 +528,7 @@ function getChunk(cx, cz) {
   return c;
 }
 function getBlock(x, y, z) {
-  if (y < 0) return DIMS[dim].void ? AIR : BEDROCK;   // 虚空の世界だけは底が抜けている
+  if (y < 0) return DIMS[dim].void ? AIR : CORE;   // 虚空の世界だけは底が抜けている
   if (y >= H) return AIR;
   return getChunk(x >> 4, z >> 4)[(y * CS + (z & 15)) * CS + (x & 15)];
 }
@@ -552,8 +556,8 @@ function batch(fn) {
   meshBatch = new Set();
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3);   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
-const solid = b => opaque(b) || b === GLASS;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const solid = b => opaque(b) || b === GLASS || b === PORTAL;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -680,6 +684,8 @@ const WHITE = [1, 1, 1];
     if (x >= 7 && x <= 8 && y >= 4 && y <= 7) return y === 4 || y === 7 ? [120, 120, 128] : [216, 216, 224];
     return chestWood(x, y, s);
   }), chestTop);
+  set(CORE, mk((x, y, s) => R(x, y, s) > 0.93 ? [70, 96, 150] : sh([26, 26, 34], (R(x >> 1, y >> 1, s + 1) - 0.5) * 22)));   // ほぼ黒に青い粒
+  set(PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.3 + Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.4 ? [255, 170, 60] : w > -0.3 ? [214, 84, 30] : [70, 20, 16]; }));   // 赤と橙の渦
   set(BOMB, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5); return d < 1.6 ? [236, 226, 196] : d < 3 ? [30, 28, 28] : frame(x, y) ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12); }),
     mk((x, y, s) => y >= 6 && y <= 9 ? ((x + y) % 6 < 3 ? [244, 200, 40] : [28, 26, 26]) : frame(x, y) || y === 5 || y === 10 ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12)),
     mk((x, y, s) => frame(x, y) ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12)));
@@ -799,13 +805,15 @@ function buildMesh(cx, cz) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
     if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
-    if (b === BED || b === SAPLING || isCake(b)) {
+    if (b === BED || b === SAPLING || isCake(b) || b === PORTAL) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
       const X = ox + x, Z = oz + z;
       if (b === BED) {   // 木の台・赤い布団・白い枕
         boxMesh(ov, oi, X, y, Z, X + 1, y + 0.3, Z + 1, null, null, lt, tl, TILE[PLANKS][0]);
         boxMesh(ov, oi, X + 0.03, y + 0.3, Z + 0.03, X + 0.97, y + 0.56, Z + 0.97, null, null, lt, tl, TILE[BED][0]);
         boxMesh(ov, oi, X + 0.15, y + 0.56, Z + 0.08, X + 0.85, y + 0.66, Z + 0.38, null, null, lt, tl, TILE[WOOL][0]);
+      } else if (b === PORTAL) {   // 枠の上面とそろう光る板。上に立てる
+        boxMesh(ov, oi, X, y + 0.8, Z, X + 1, y + 1, Z + 1, null, null, 1, 1, TILE[PORTAL][0]);
       } else if (isCake(b)) {   // 食べた分だけ片側から欠けていく
         boxMesh(ov, oi, X + 0.07 + (b - CAKE0) * 0.215, y, Z + 0.07, X + 0.93, y + 0.45, Z + 0.93, COL[b][0], COL[b][1], lt, tl);
       } else {           // 細い幹と葉のかたまり
@@ -1377,12 +1385,13 @@ function dropsOf(b, tool) {
     return r < 0.06 ? [SAPLING] : r < 0.08 ? [APPLE] : [];
   }
   if (b === GLASS) return [];   // ガラスは割れて無くなる
+  if (b === PORTAL) return [];
   if (isCake(b)) return b === CAKE0 ? [CAKE0] : [];   // 食べかけのケーキは回収できない
   if (b >= CARROT0 && b <= POTATO3) {                  // 育ちきっていれば 2〜4個、途中なら植えた1個が戻る
     const it = b <= CARROT3 ? CARROT : POTATO;
     return ((b - CARROT0) & 3) === 3 ? Array(2 + Math.floor(Math.random() * 3)).fill(it) : [it];
   }
-  if (b === TALLGRASS) return Math.random() < 0.15 ? [SEEDS] : [];          // 草: 15% で種
+  if (b === TALLGRASS) return Math.random() < 0.06 ? [SEEDS] : [];          // 草: 15% で種
   if (b === WHEAT3) return Math.random() < 0.5 ? [WHEAT, SEEDS, SEEDS] : [WHEAT, SEEDS];
   if (b >= WHEAT0 && b < WHEAT3) return [SEEDS];
   if (b === GRASS || b === SNOWGRASS || b === FARMLAND) return [DIRT];
@@ -1951,6 +1960,7 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  '地底への門: 一番下の岩盤を爆薬で吹き飛ばすと、時々岩盤ブロックが手に入る。それを地面に 5×5 の輪（真ん中 3×3 は空ける。四隅は無くてよい）に並べ、真ん中で爆薬を爆発させると門が開く。門の上に少し立つと移動する。',
   '爆薬: 置いて右クリックで点火、3秒後に周りのブロックごと爆発する。火薬はタルボムから。ワープ玉（カスミが落とす）は右クリックで投げると、落ちた場所へ移動する。',
   '卵は鶏が時々産む。にんじんとじゃがいもはゾンビが時々落とし、耕した土に植えると増やせる。ケーキは置いて右クリックで4回食べられる。',
   'かまど（材料＋燃料）: 鉄鉱石→鉄 / 金鉱石→金 / 丸石→石 / 原木→石炭 / 生肉→焼いた肉。燃料は石炭・原木・板材・棒。',
@@ -2323,7 +2333,11 @@ const NET = {
       o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.tpitch = pitch; o.sn = sn; o.eq = eq || '0000';
     }
   },
-  dim(m) { enterDim(m, pendingPos); pendingPos = null; toast(DIMS[dim].name + ' に来た'); },
+  dim(m) {
+    enterDim(m, pendingPos); pendingPos = null;
+    if (gateFrom) { arriveGate(gateFrom.x, gateFrom.z); gateFrom = null; }   // 門をくぐって来た
+    toast(DIMS[dim].name + ' に来た');
+  },
   pdim(m) { const o = others.get(m.id); if (o) { o.dim = m.dim; o.ty = o.y = -100; } },   // 誰かが世界を移った（次の位置報告が来るまで隠す）
   set(m) { netApply(m.x, m.y, m.z, m.b); },
   sets(m) { batch(() => { for (const [x, y, z, b] of m.l) netApply(x, y, z, b); }); },
@@ -2354,7 +2368,7 @@ const NET = {
       mb.tx = x; mb.ty = y; mb.tz = z; mb.tyaw = yaw; mb.fuse = fz || 0;
     }
   },
-  boom(m) { boomFx(m.x, m.y, m.z, m.r); hurtByBoom(m.x, m.y, m.z, m.r); },
+  boom(m) { boomFx(m.x, m.y, m.z, m.r); if (!m.fake) hurtByBoom(m.x, m.y, m.z, m.r); },   // fake: 門が開く時の見た目だけの爆発
   fuse(m) { fuses.push({ x: m.x, y: m.y, z: m.z, t: m.s, mine: false }); },
   mrm(m) { mobs.delete(m.id); },
   mown(m) { const mb = mobs.get(m.id); if (mb) { mb.owner = m.owner; mb.vy = 0; mb.dir = mb.yaw; } },
@@ -2905,6 +2919,68 @@ function drawArrows() {
   gl.drawElements(gl.TRIANGLES, boxes * 36, gl.UNSIGNED_SHORT, 0);
 }
 
+// ---------- 地底への門 ----------
+// 自分で置いた岩盤を、地面に 5x5 の輪（真ん中 3x3 は空ける。四隅は無くてもよい）に並べ、
+// 真ん中に爆薬を置いて爆発させると、輪の内側が門になる。この爆発は見た目だけ（ダメージもブロック破壊も無い）。
+// 門の上に少し立っていると、地上 ⇔ 地底 を行き来する。座標は対応していて、着いた先に門が無ければ帰りの門を作る。
+function placedBedrock(x, y, z) {   // 自然の岩盤ではなく、プレイヤーが置いた岩盤か
+  const e = edits.get(ckey(x >> 4, z >> 4));
+  return !!e && e.get((y * CS + (z & 15)) * CS + (x & 15)) === BEDROCK && getBlock(x, y, z) === BEDROCK;
+}
+function tryOpenGate(x, y, z) {   // (x,y,z) = 爆薬があった場所。門を開けたら true
+  if (dim === 2) return false;
+  for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+    const ring = Math.max(Math.abs(dx), Math.abs(dz)) === 2, corner = Math.abs(dx) === 2 && Math.abs(dz) === 2;
+    if (ring) { if (!corner && !placedBedrock(x + dx, y, z + dz)) return false; }
+    else if (solid(getBlock(x + dx, y, z + dz))) return false;   // 内側 3x3 は空いていること
+  }
+  const l = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) l.push([x + dx, y, z + dz, PORTAL, getBlock(x + dx, y, z + dz)]);
+  netSets(l);
+  boomFx(x + 0.5, y + 0.5, z + 0.5, 4);
+  send({ t: 'boom', x: x + 0.5, y: y + 0.5, z: z + 0.5, r: 4, fake: 1 });
+  toast('門が開いた');
+  return true;
+}
+let gateT = 0, gateLock = false, gateFrom = null;
+function updateGate(dt) {
+  const f = Math.floor, on = started && getBlock(f(P.x), f(P.y - 0.05), f(P.z)) === PORTAL;   // 門の上に立っている
+  if (!on) { gateT = 0; gateLock = false; return; }   // 門から降りたら、次にまた乗れる
+  if (gateLock || dim === 2) return;
+  gateT += dt;
+  if (gateT < 1.2) return;
+  gateT = 0; gateLock = true;
+  gateFrom = { x: f(P.x), z: f(P.z) };
+  if (dim === 0) P.back = { x: P.x, y: P.y, z: P.z };
+  send({ t: 'dim', d: dim === 0 ? 1 : 0 });
+}
+// 門をくぐって着いた時: 近くに門があればそこに立つ。無ければ（地底なら）帰りの門を作る
+function arriveGate(x, z) {
+  gateLock = true;
+  for (let r = 0; r <= 6; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+    for (let y = 1; y < H - 1; y++) if (getBlock(x + dx, y, z + dz) === PORTAL) { P.x = x + dx + 0.5; P.y = y + 1; P.z = z + dz + 0.5; P.vy = 0; return; }
+  }
+  if (dim === 0) {   // 地上に門が残っていない: その場所の地表に出る
+    let y = H - 1;
+    while (y > 1 && !solid(getBlock(x, y, z))) y--;
+    P.x = x + 0.5; P.y = y + 1; P.z = z + 0.5; P.vy = 0;
+    return;
+  }
+  // 地底: 立てる床を探し（無ければ高さ24に部屋を掘る）、床・岩盤の輪・門を置いて、上の3マスを空ける
+  let gy = 24;
+  for (let y = 44; y >= 4; y--) if (solid(getBlock(x, y - 1, z)) && !solid(getBlock(x, y, z)) && !solid(getBlock(x, y + 1, z)) && !solid(getBlock(x, y + 2, z))) { gy = y; break; }
+  const l = [];
+  for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
+    const bx = x + dx, bz = z + dz, ring = Math.max(Math.abs(dx), Math.abs(dz)) === 2;
+    if (!solid(getBlock(bx, gy - 1, bz))) l.push([bx, gy - 1, bz, STONE, getBlock(bx, gy - 1, bz)]);
+    l.push([bx, gy, bz, ring ? BEDROCK : PORTAL, getBlock(bx, gy, bz)]);
+    for (let dy = 1; dy <= 3; dy++) { const b = getBlock(bx, gy + dy, bz); if (b !== AIR && gy + dy < H - 2) l.push([bx, gy + dy, bz, AIR, b]); }
+  }
+  netSets(l);
+  P.x = x + 0.5; P.y = gy + 1; P.z = z + 0.5; P.vy = 0;
+}
+
 // ---------- 爆発・爆薬・ワープ玉 ----------
 // 爆発も「起こした側のブラウザ」が壊すブロックを決めてまとめて送る（サーバーは地形を知らないため）。
 // ダメージは、合図を受け取った各自のブラウザが自分との距離で計算する。モブへのダメージはサーバーがやる。
@@ -2929,7 +3005,11 @@ function explode(x, y, z, r, mobId) {
   for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.hypot(dx, dy, dz) > r - Math.random() * 0.8) continue;   // ふちは少しガタつかせる
     const bx = f(x) + dx, by = f(y) + dy, bz = f(z) + dz, b = getBlock(bx, by, bz);
-    if (by < 1 || by >= H || b === AIR || b === WATER || b === BEDROCK) continue;
+    if (by < 1 || by >= H || b === AIR || b === WATER || b === CORE) continue;
+    if (b === BEDROCK) {   // 岩盤: 6% で割れて、岩盤ブロックを落とす（それ以外はびくともしない）
+      if (Math.random() < 0.06) netSet(bx, by, bz, AIR, BEDROCK, [BEDROCK]);
+      continue;
+    }
     if (b === BOMB) chain.push([bx, by, bz]);   // 巻き込まれた爆薬は誘爆する
     l.push([bx, by, bz, AIR, b]); seen.add(bx + ',' + by + ',' + bz);
   }
@@ -2985,7 +3065,7 @@ function updateFx(dt) {
     fz.t -= dt;
     if (fz.t > 0) continue;
     fuses.splice(i, 1);
-    if (fz.mine) explode(fz.x + 0.5, fz.y + 0.5, fz.z + 0.5, 4, 0);
+    if (fz.mine && !tryOpenGate(fz.x, fz.y, fz.z)) explode(fz.x + 0.5, fz.y + 0.5, fz.z + 0.5, 4, 0);   // 門の枠の真ん中なら、爆発せず門が開く
   }
 }
 function drawFx() {
@@ -3109,7 +3189,7 @@ let last = 0, fps = 60, hudT = 0;
 function frame(t) {
   const dt = Math.min((t - last) / 1000 || 0, 0.1); last = t;
   tod = (tod + dt / DAYLEN) % 1;
-  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); updateArrows(dt); updateFx(dt); netTick(dt); loadChunks(); render(); updateTags();
+  update(dt); updateInteract(dt); updateItems(dt); updateFurnace(dt); updateMobs(dt); updateArrows(dt); updateFx(dt); updateGate(dt); netTick(dt); loadChunks(); render(); updateTags();
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
   if (t - hudT > 200) {
     hudT = t;
