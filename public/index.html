@@ -1786,22 +1786,30 @@ function update(dt) {
 
 // ---------- 体力・スタミナ（どちらも 20 = アイコン10個、1個で2ポイント） ----------
 function drain(v) { P.st = Math.max(0, P.st - v); P.rest = 0; if (P.st <= 0) P.tired = true; }
+let deathHome = false;   // 地底・虚空で倒れて、地上へ戻る途中
 function damage(v, cause) {
-  if (v <= 0) return;
+  if (v <= 0 || deathHome) return;
   P.hp = Math.max(0, P.hp - v); P.regen = 0;
   hurtEl.style.transition = 'none'; hurtEl.style.opacity = 0.35;
   requestAnimationFrame(() => { hurtEl.style.transition = ''; hurtEl.style.opacity = 0; });
   if (P.hp <= 0) {
     P.hp = 20; P.st = 20; P.tired = false; P.kbx = P.kbz = 0;
-    const atBed = respawn();
     send({ t: 'died', cause: cause || '' });
-    toast(atBed ? '力尽きた…… ベッドに戻った' : '力尽きた…… スタート地点に戻った');
+    if (dim !== 0) {   // 地底・虚空で倒れたら、地上のベッド（無ければスタート地点）へ戻す。移動が終わるまではダメージを受けない
+      deathHome = true; P.vx = P.vy = P.vz = 0;
+      send({ t: 'dim', d: 0 });
+      toast('力尽きた…… 地上へ戻る');
+    } else {
+      const atBed = respawn();
+      toast(atBed ? '力尽きた…… ベッドに戻った' : '力尽きた…… スタート地点に戻った');
+    }
   }
   drawStats();
 }
 function updateStats(dt) {
   hammerCd = Math.max(0, hammerCd - dt); bladeCd = Math.max(0, bladeCd - dt);
-  if (P.y < -24) { P.inv = 0; damage(100, '奈落'); }   // 虚空の世界で島から落ちた
+  if (P.y < -24 && !deathHome) { P.inv = 0; damage(100, '奈落'); }
+  if (deathHome) { P.vy = 0; P.y = Math.max(P.y, -20); }   // 地上へ戻るのを待つ間は落ち続けない   // 虚空の世界で島から落ちた
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
   if (P.land > 0) { if (!inWater && !fullSet(7)) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
   // スタミナ: ダッシュをやめて1秒たつと回復。使い切ると4まで戻るまでダッシュ不可
@@ -2139,9 +2147,9 @@ function toast(text) { toastEl.textContent = text; toastEl.style.opacity = 1; se
 let sleeping = false;
 const nightNow = () => tod > 0.76 || tod < 0.24;
 function useBed(t) {
+  if (dim !== 0) { toast('地上以外のベッドは使えない（倒れると地上に戻る）'); return; }   // 地上のベッドを上書きしないように
   P.bed = { x: t.x, y: t.y, z: t.z, dim };
   saveLocal();
-  if (dim !== 0) { toast('復活地点をこのベッドにした（寝られるのは地上だけ）'); return; }
   $('sleep').innerHTML = nightNow() ? '就寝中……<br>全員がベッドに入ると朝になる（何かキーを押すと起きる）' : '夜まで休憩中……<br>全員がベッドに入ると夜になる（何かキーを押すと起きる）';
   sleeping = true; $('sleep').style.display = 'flex';
   for (const k in keys) keys[k] = false;
@@ -3052,6 +3060,11 @@ const NET = {
   },
   dim(m) {
     enterDim(m, pendingPos); pendingPos = null;
+    if (deathHome && dim === 0) {   // 倒れて戻ってきた: 地上のベッドかスタート地点へ
+      deathHome = false; gateFrom = null; P.back = null;
+      toast(respawn() ? '力尽きた…… 地上のベッドに戻った' : '力尽きた…… 地上のスタート地点に戻った');
+      return;
+    }
     if (gateFrom) { arriveGate(gateFrom.x, gateFrom.z, gateFrom.kind); gateFrom = null; }   // 門をくぐって来た
     toast(DIMS[dim].name + ' に来た');
   },
