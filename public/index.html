@@ -155,7 +155,8 @@ const AIR = 0, GRASS = 1, DIRT = 2, STONE = 3, SAND = 4, WATER = 5, LOG = 6, LEA
   // 地底のブロック
   DEEPSTONE = 61, DEEP_BRICK = 62, GLOWMOSS = 63, MYCEL = 64, GLOWSHROOM = 65, MUSH_STEM = 66, MUSH_CAP = 67,
   GLOW_ORE = 68, DARKIRON_ORE = 69, EMBER_ORE = 70, VOID_ORE = 71, LAMP = 72,
-  RUIN_BRICK = 73, RUIN_CRACKED = 74, RUIN_PILLAR = 75, RUIN_RUNE = 76;   // 地底の遺跡   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
+  RUIN_BRICK = 73, RUIN_CRACKED = 74, RUIN_PILLAR = 75, RUIN_RUNE = 76,   // 地底の遺跡
+  VOID_PORTAL = 77;   // 虚空への門（おかかっぱを倒すと遺跡に開く）   // CORE: 世界の一番下にある、何をしても壊れない層。PORTAL: 地底への門   // にんじん・じゃがいもの成長段階（小麦と同じ4段階）   // 24〜28 は植物（すり抜ける・四角くない）
 // 100 以上はブロックとして置けないアイテム
 const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104, SEEDS = 105, WHEAT = 106, BREAD = 107,
   RAW_PORK = 120, COOKED_PORK = 121, RAW_BEEF = 122, COOKED_BEEF = 123, RAW_CHICKEN = 124, COOKED_CHICKEN = 125, ROTTEN = 126,
@@ -163,7 +164,8 @@ const STICK = 100, COAL = 101, IRON_INGOT = 102, GOLD_INGOT = 103, DIAMOND = 104
   EGG = 137, CARROT = 138, POTATO = 139, BAKED_POTATO = 140,
   STRING = 141, FEATHER = 142, BONE = 143, BONE_MEAL = 144, ARROW = 145, BOW = 146,
   GUNPOWDER = 147, WARP_ORB = 148, GUIDE_EYE = 149,
-  GLOW_DUST = 150, DARK_INGOT = 151, EMBER = 152, VOID_GEM = 153;   // 地底の素材   // 防具は 300 番台
+  GLOW_DUST = 150, DARK_INGOT = 151, EMBER = 152, VOID_GEM = 153,   // 地底の素材
+  OKA_CORE = 154, EMBER_SWORD = 155, ERUPT_HAMMER = 156, EMBER_BOW = 157, VOID_BLADE = 158, VOID_STAFF = 159, VOID_CLOAK = 160;   // おかかっぱの核と特別装備   // 防具は 300 番台
 // ツールは 200 + ランク*10 + 種類
 const NAME = ['', '草ブロック', '土', '石', '砂', '水', '原木', '葉', '雪', '岩盤', '氷', 'サボテン', '雪の草ブロック', '針葉樹の葉', '砂岩'];
 // [上面, 側面, 底面]
@@ -330,6 +332,19 @@ Object.assign(NAME, { [RUIN_BRICK]: '遺跡レンガ', [RUIN_CRACKED]: 'ひび�
 Object.assign(HARD, { [RUIN_BRICK]: 12, [RUIN_CRACKED]: 8, [RUIN_PILLAR]: 12, [RUIN_RUNE]: 12 });
 for (const b of [RUIN_BRICK, RUIN_CRACKED, RUIN_PILLAR, RUIN_RUNE]) { TOOL_FOR[b] = 'pick'; NEED_PICK[b] = 3; }
 GLOW[RUIN_RUNE] = 7;
+// ---- おかかっぱ・虚空の門・特別装備（第7弾） ----
+Object.assign(NAME, { [VOID_PORTAL]: '虚空の門', [OKA_CORE]: 'おかかっぱの核', [EMBER_SWORD]: '紅炎の大剣', [ERUPT_HAMMER]: '噴火の槌', [EMBER_BOW]: '紅炎の弓',
+  [VOID_BLADE]: '虚晶の刃', [VOID_STAFF]: '虚晶の杖', [VOID_CLOAK]: '虚無の外套' });
+HARD[VOID_PORTAL] = Infinity;   // 虚空の門は壊せない（遺跡の門が消えないように）
+GLOW[VOID_PORTAL] = GLOW[PORTAL] = 7;
+// 特別な武器。slow: 振りが遅い（攻撃の間隔0.8秒）。burn: 当てた相手が燃える
+TOOLS[EMBER_SWORD] = { type: 'sword', tier: 6, speed: 1, dur: 2000, lvl: 0, dmg: 12, slow: true, burn: true };
+TOOLS[ERUPT_HAMMER] = { type: 'hammer', tier: 6, speed: 1, dur: 1500, lvl: 0, dmg: 9 };    // 右クリックで周りを吹き飛ばす
+TOOLS[EMBER_BOW] = { type: 'bow', tier: 6, speed: 1, dur: 800, lvl: 0, dmg: 1 };          // 当たると小さく爆発する矢
+TOOLS[VOID_BLADE] = { type: 'sword', tier: 7, speed: 1, dur: 1600, lvl: 0, dmg: 11 };      // 右クリックで前へ瞬間移動
+TOOLS[VOID_STAFF] = { type: 'staff', tier: 7, speed: 1, dur: 600, lvl: 0, dmg: 1 };        // 右クリックで光の弾
+ARMOR[VOID_CLOAK] = { part: 1, tier: 7, def: 9, dur: 16 * 30 };                            // 胴。2割で攻撃を無効にする
+const isBow = b => b === BOW || b === EMBER_BOW;
 const durOf = b => TOOLS[b] ? TOOLS[b].dur : ARMOR[b] ? ARMOR[b].dur : 0;
 const SKY = [0.56, 0.77, 0.95];
 
@@ -710,8 +725,8 @@ function batch(fn) {
   meshBatch = new Set();
   try { fn(); } finally { const ks = meshBatch; meshBatch = null; for (const k of ks) remesh(k); }
 }
-const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
-const solid = b => opaque(b) || b === GLASS || b === PORTAL;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
+const opaque = b => b !== AIR && b !== WATER && !(b >= TALLGRASS && b <= TORCH + 4) && b !== BED && b !== GLASS && b !== SAPLING && !(b >= CAKE0 && b <= POTATO3) && b !== PORTAL && b !== GLOWSHROOM && b !== VOID_PORTAL;   // 植物・松明は空気と同じ扱い（すり抜ける・光を通す）
+const solid = b => opaque(b) || b === GLASS || b === PORTAL || b === VOID_PORTAL;   // ぶつかるブロック。ガラスは光を通すがぶつかる。ベッドはすり抜ける
 function colOf(b, ci, bi) {
   if (b === GRASS && ci < 2) return GTINT[bi][ci];
   return COL[b][ci];
@@ -872,6 +887,7 @@ const WHITE = [1, 1, 1];
     const g = (x === 7 || x === 8) && y >= 3 && y <= 12 || (y === 7 || y === 8) && x >= 3 && x <= 12 || Math.abs(Math.hypot(x - 7.5, y - 7.5) - 5) < 0.6;
     return g ? [255, 222, 120] : frame(x, y) ? [44, 52, 58] : sh([60, 70, 78], (R(x, y, s) - 0.5) * 12);
   }));
+  set(VOID_PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.4 - Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.5 ? [236, 210, 255] : w > -0.2 ? [140, 70, 220] : [34, 14, 60]; }));   // 紫と白の渦
   set(CORE, mk((x, y, s) => R(x, y, s) > 0.93 ? [70, 96, 150] : sh([26, 26, 34], (R(x >> 1, y >> 1, s + 1) - 0.5) * 22)));   // ほぼ黒に青い粒
   set(PORTAL, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5), w = Math.sin(d * 1.3 + Math.atan2(y - 7.5, x - 7.5) * 2); return w > 0.4 ? [255, 170, 60] : w > -0.3 ? [214, 84, 30] : [70, 20, 16]; }));   // 赤と橙の渦
   set(BOMB, mk((x, y, s) => { const d = Math.hypot(x - 7.5, y - 7.5); return d < 1.6 ? [236, 226, 196] : d < 3 ? [30, 28, 28] : frame(x, y) ? [36, 32, 32] : sh([74, 66, 64], (R(x, y, s) - 0.5) * 12); }),
@@ -995,7 +1011,7 @@ function buildMesh(cx, cz) {
     const b = d[(y * CS + z) * CS + x];
     if (b === AIR) continue;
     if (isTorch(b)) { torchMesh(ov, oi, b, ox + x, y, oz + z); continue; }
-    if (b === BED || b === SAPLING || isCake(b) || b === PORTAL || b === GLOWSHROOM) {
+    if (b === BED || b === SAPLING || isCake(b) || b === PORTAL || b === GLOWSHROOM || b === VOID_PORTAL) {
       const tp = d.top[z * CS + x], tl = TL ? TL(x, y, z) : 0, lt = Math.max(tl, y <= tp ? Math.max(0.3, 0.9 - (tp - y) * 0.06) : 1);
       const X = ox + x, Z = oz + z;
       if (b === BED) {   // 木の台・赤い布団・白い枕
@@ -1006,8 +1022,8 @@ function buildMesh(cx, cz) {
         const ox2 = 0.25 + hash3(X, y, Z, 60) * 0.5, oz2 = 0.25 + hash3(X, y, Z, 61) * 0.5, s2 = 0.15 + hash3(X, y, Z, 62) * 0.1, h2 = 0.3 + hash3(X, y, Z, 63) * 0.25;
         boxMesh(ov, oi, X + ox2 - 0.05, y, Z + oz2 - 0.05, X + ox2 + 0.05, y + h2, Z + oz2 + 0.05, null, null, 1, 1, TILE[MUSH_STEM][1]);
         boxMesh(ov, oi, X + ox2 - s2, y + h2, Z + oz2 - s2, X + ox2 + s2, y + h2 + 0.12, Z + oz2 + s2, null, null, 1, 1, TILE[MUSH_CAP][0]);
-      } else if (b === PORTAL) {   // 枠の上面とそろう光る板。上に立てる
-        boxMesh(ov, oi, X, y + 0.8, Z, X + 1, y + 1, Z + 1, null, null, 1, 1, TILE[PORTAL][0]);
+      } else if (b === PORTAL || b === VOID_PORTAL) {   // 枠の上面とそろう光る板。上に立てる
+        boxMesh(ov, oi, X, y + 0.8, Z, X + 1, y + 1, Z + 1, null, null, 1, 1, TILE[b][0]);
       } else if (isCake(b)) {   // 食べた分だけ片側から欠けていく
         boxMesh(ov, oi, X + 0.07 + (b - CAKE0) * 0.215, y, Z + 0.07, X + 0.93, y + 0.45, Z + 0.93, COL[b][0], COL[b][1], lt, tl);
       } else {           // 細い幹と葉のかたまり
@@ -1353,6 +1369,35 @@ const SPR = {}, SPR_IDS = [];
     for (let y = 8; y <= 14; y++) { set(7, y, [226, 220, 204]); set(8, y, [196, 188, 170]); }
     each((x, y) => { if ((x - 7.5) ** 2 / 30 + (y - 7) ** 2 / 9 < 1 && y <= 7) set(x, y, (x + y) % 4 === 0 ? [210, 250, 255] : [70, 168, 222]); });
   });
+  // ---- おかかっぱの核と特別装備 ----
+  mk(OKA_CORE, set => { each((x, y) => { const d = Math.hypot(x - 7.5, y - 8.5); if (d < 6) set(x, y, d < 2.2 ? [220, 255, 200] : d < 4 ? [110, 190, 90] : [60, 110, 52]); }); for (let x = 4; x <= 11; x++) set(x, 2, [226, 226, 216]); for (let x = 5; x <= 10; x++) set(x, 3, [196, 196, 186]); });
+  mk(EMBER_SWORD, set => {   // 幅の広い大剣
+    for (let i = 0; i < 10; i++) for (let w = -1; w <= 1; w++) set(5 + i + w, 10 - i + (w > 0 ? 1 : 0), w === 1 ? [160, 42, 26] : w === 0 ? [246, 112, 44] : [255, 200, 120]);
+    for (const [x, y] of [[2, 9], [3, 10], [4, 11], [5, 12], [6, 13], [7, 14]]) set(x, y, [60, 40, 30]);
+    set(2, 13, [128, 90, 48]); set(1, 14, [88, 60, 30]); set(3, 12, [128, 90, 48]);
+  });
+  mk(ERUPT_HAMMER, set => {
+    for (let i = 0; i < 9; i++) { set(3 + i, 13 - i, [128, 90, 48]); set(4 + i, 13 - i, [88, 60, 30]); }
+    for (let y = 1; y <= 6; y++) for (let x = 8; x <= 14; x++) set(x, y, y <= 2 ? [255, 170, 80] : x > 12 ? [130, 36, 22] : [220, 84, 36]);
+    set(10, 4, [255, 230, 140]); set(11, 4, [255, 230, 140]);
+  });
+  mk(EMBER_BOW, set => {
+    each((x, y) => { const d = Math.hypot(x - 3, y - 8); if (d >= 8 && d < 9.6 && x >= 5) set(x, y, d > 8.9 ? [150, 40, 24] : [244, 110, 44]); });
+    for (let y = 1; y <= 14; y++) set(6, y, [255, 220, 160]);
+  });
+  mk(VOID_BLADE, set => {   // 細く反った刃
+    for (let i = 0; i < 11; i++) { const x = 4 + i, y = 12 - i - (i > 6 ? 1 : 0); set(x, y, [236, 214, 255]); set(x, y + 1, [150, 92, 236]); }
+    for (const [x, y] of [[2, 10], [3, 11], [4, 12], [5, 13]]) set(x, y, [60, 40, 90]);
+    set(2, 13, [96, 52, 178]); set(1, 14, [70, 36, 130]);
+  });
+  mk(VOID_STAFF, set => {
+    for (let i = 0; i < 10; i++) { set(2 + i, 14 - i, [128, 90, 48]); set(3 + i, 14 - i, [88, 60, 30]); }
+    each((x, y) => { const d = Math.hypot(x - 12, y - 3.5); if (d < 3) set(x, y, d < 1.2 ? [250, 236, 255] : [168, 116, 246]); });
+  });
+  mk(VOID_CLOAK, set => {
+    for (let y = 2; y <= 14; y++) for (let x = 3; x <= 12; x++) { const w = 2 + Math.floor((y - 2) / 3); if (Math.abs(x - 7.5) > w + 0.5) continue; set(x, y, y <= 3 ? [236, 214, 255] : x < 8 ? [96, 52, 178] : [70, 36, 130]); }
+    set(7, 4, [244, 220, 120]); set(8, 4, [244, 220, 120]);
+  });
   // 防具（素材の色だけ変えて使い回す）
   const ARM_DRAW = [
     m => set => { for (let y = 4; y <= 10; y++) for (let x = 3; x <= 12; x++) { if (y === 4 && (x === 3 || x === 12)) continue; if (y >= 8 && x >= 6 && x <= 9) continue; set(x, y, y < 6 ? m[0] : m[1]); } for (let x = 4; x <= 7; x++) set(x, 5, [255, 255, 255]); },
@@ -1530,6 +1575,7 @@ function damage(v, cause) {
   drawStats();
 }
 function updateStats(dt) {
+  hammerCd = Math.max(0, hammerCd - dt); bladeCd = Math.max(0, bladeCd - dt);
   if (P.y < -24) { P.inv = 0; damage(100, '奈落'); }   // 虚空の世界で島から落ちた
   // 落下ダメージ: 着地速度から落ちた高さを逆算して、3ブロックを超えた分だけ減る
   if (P.land > 0) { if (!inWater && !fullSet(7)) damage(Math.floor(P.land * P.land / 52 - 2.5), '落下'); P.land = 0; }
@@ -1588,7 +1634,7 @@ function dropsOf(b, tool) {
     return r < 0.06 ? [SAPLING] : r < 0.08 ? [APPLE] : [];
   }
   if (b === GLASS) return [];   // ガラスは割れて無くなる
-  if (b === PORTAL) return [];
+  if (b === PORTAL || b === VOID_PORTAL) return [];
   if (b === GLOW_ORE) return Array(2 + Math.floor(Math.random() * 2)).fill(GLOW_DUST);   // 灯晶石は灯晶を2〜3個
   if (b === EMBER_ORE) return [EMBER];
   if (b === VOID_ORE) return [VOID_GEM];
@@ -1710,7 +1756,14 @@ function useItem() {
     if (dist < 14) toast('遺跡はすぐそこだ');
     return;
   }
-  if (st && st.b === BOW) return;   // 弓は updateInteract で引きを数える
+  if (st && isBow(st.b)) return;   // 弓は updateInteract で引きを数える
+  if (st && st.b === ERUPT_HAMMER) { useHammer(); return; }
+  if (st && st.b === VOID_BLADE) { useBlade(); return; }
+  if (st && st.b === VOID_STAFF) {   // 虚晶の杖: 光の弾をまっすぐ撃つ（ダメージ7）
+    const d = lookDir();
+    launchArrow(P.x + d[0] * 0.5, eyeY() - 0.1 + d[1] * 0.5, P.z + d[2] * 0.5, d[0] * 30, d[1] * 30, d[2] * 30, 7, 0, 4);
+    useTool(); placeCd = 0.8; return;
+  }
   if (st && st.b === BONE_MEAL && target) {   // 骨粉: 作物を一気に育てきる、苗木をその場で木にする
     const { x, y, z, b } = target;
     let ok = false;
@@ -1754,12 +1807,45 @@ function updateInteract(dt) {
   if (mouse.r && placeCd <= 0 && active()) { placeCd = 0.25; useItem(); }
   breakProg = prog;
   // 弓: 右クリックを押している間は引き、離した瞬間に撃つ（1秒で最大）
-  const bowHeld = slots[sel] && slots[sel].b === BOW && active();
+  const bowHeld = slots[sel] && isBow(slots[sel].b) && active();
   if (bowHeld && mouse.r) bowT += dt;
   else { if (bowHeld && bowT > 0.15) fireBow(Math.min(1, bowT)); bowT = 0; }
   const bar = $('brk');
   bar.style.display = bowT > 0 ? 'block' : 'none';
   if (bowT > 0) bar.firstChild.style.width = Math.min(100, bowT * 100).toFixed(0) + '%';
+}
+
+// ---------- 特別装備（第7弾） ----------
+let hammerCd = 0, bladeCd = 0;
+// 噴火の槌: 周り5ブロックの敵とプレイヤーにダメージ8を与えて外へ吹き飛ばす（8秒に1回）
+function useHammer() {
+  if (hammerCd > 0) { toast('噴火の槌はあと ' + Math.ceil(hammerCd) + ' 秒'); placeCd = 0.5; return; }
+  hammerCd = 8; placeCd = 0.5;
+  boomFx(P.x, P.y + 0.3, P.z, 3);
+  const push = (x, z) => { const l = Math.hypot(x - P.x, z - P.z) || 1; return [(x - P.x) / l * 8, (z - P.z) / l * 8]; };
+  for (const [id, m] of mobs) {
+    if (Math.hypot(m.x - P.x, m.y - P.y, m.z - P.z) > 5) continue;
+    const [kx, kz] = push(m.x, m.z);
+    send({ t: 'mhit', id, dmg: 8, kx, kz });
+  }
+  for (const [id, p] of others) {
+    if (p.ty < -50 || Math.hypot(p.x - P.x, p.y - P.y, p.z - P.z) > 5) continue;
+    const [kx, kz] = push(p.x, p.z);
+    p.hurt = 0.3; send({ t: 'hit', id, dmg: 8, kx, kz });
+  }
+  useTool();
+}
+// 虚晶の刃: 向いている方向へ最大5ブロック瞬間移動（壁の手前で止まる。5秒に1回。移動直後は少し無敵）
+function useBlade() {
+  if (bladeCd > 0) { toast('虚晶の刃はあと ' + Math.ceil(bladeCd) + ' 秒'); placeCd = 0.5; return; }
+  const d = lookDir(), l = Math.hypot(d[0], d[2]) || 1, dx = d[0] / l, dz = d[2] / l;
+  let k = 0;
+  while (k < 5 && !boxHit(P.x + dx * (k + 0.25), P.y + 0.01, P.z + dz * (k + 0.25), PW, PH)) k += 0.25;
+  if (k < 0.5) { placeCd = 0.3; return; }
+  for (let t = 0; t < k; t += 0.5) parts.push({ x: P.x + dx * t, y: P.y + 1, z: P.z + dz * t, vx: 0, vy: 0.5, vz: 0, life: 0.5, col: [0.72, 0.5, 0.98] });
+  P.x += dx * (k - 0.25); P.z += dz * (k - 0.25); P.inv = 0.4;
+  bladeCd = 5; placeCd = 0.5;
+  useTool();
 }
 
 // ---------- ベッド・防具・盾・バケツ・苗木（第2弾） ----------
@@ -2051,6 +2137,14 @@ RECIPES.push(
   { p: ['GG', 'GG'], k: { G: GLOW_DUST }, out: [LAMP, 1] },
   { p: ['G', 'S'], k: { G: GLOW_DUST, S: STICK }, out: [TORCH, 4] },
 );
+RECIPES.push(   // 特別装備: おかかっぱの核が1つ要る（K=核 E=紅炎 V=虚晶 S=棒 W=糸）
+  { p: [' E ', 'EKE', ' S '], k: { E: EMBER, K: OKA_CORE, S: STICK }, out: [EMBER_SWORD, 1] },
+  { p: ['EEE', 'EKE', ' S '], k: { E: EMBER, K: OKA_CORE, S: STICK }, out: [ERUPT_HAMMER, 1] },
+  { p: ['ESW', 'K W', 'ESW'], k: { E: EMBER, K: OKA_CORE, S: STICK, W: STRING }, out: [EMBER_BOW, 1] },
+  { p: [' V ', 'VKV', ' S '], k: { V: VOID_GEM, K: OKA_CORE, S: STICK }, out: [VOID_BLADE, 1] },
+  { p: [' VK', ' SV', 'S  '], k: { V: VOID_GEM, K: OKA_CORE, S: STICK }, out: [VOID_STAFF, 1] },
+  { p: ['V V', 'VKV', 'VVV'], k: { V: VOID_GEM, K: OKA_CORE }, out: [VOID_CLOAK, 1] },
+);
 const ARMOR_PAT = [['MMM', 'M M'], ['M M', 'MMM', 'MMM'], ['MMM', 'M M', 'M M'], ['M M', 'M M']];
 ARMOR_TIERS.forEach(ti => ARMOR_PAT.forEach((p, pi) => RECIPES.push({ p, k: { M: TIERS[ti].mat }, out: [armorId(ti, pi), 1], hide: ti > 2 })));
 // ツール: ツルハシ・斧・シャベル・剣・クワ × 5素材
@@ -2182,6 +2276,7 @@ for (const text of ['ツールは板材を 丸石・鉄インゴット・金イ�
   'ブロック（鉄・金・ダイヤ・石炭）は、1個置くと9個に戻せる。',
   'かまど追加分: 砂→ガラス / 粘土→レンガ / じゃがいも→焼きじゃがいも。苗木とリンゴは葉を壊すと時々落ちる。羊毛は羊から。',
   '弓: 矢を持って右クリック長押しで引き、離すと撃つ。糸はクモ、骨と矢はスケルトン、羽は鶏から。骨粉は作物と苗木を一気に育てる。',
+  'おかかっぱ: 遺跡の大広間にいるボス。近いと殴り、離れると岩を投げる（溜めの間に横へよける）。倒すと広間の真ん中に虚空への門が開き、核を落とす。核で紅炎の大剣・噴火の槌・紅炎の弓・虚晶の刃・虚晶の杖・虚無の外套が作れる。',
   '導きの目: 地底で右クリックすると、一番近い遺跡の方へ飛んでいく（2割で砕ける）。遺跡の四隅にはチェストがある。',
   '地底: 深石の地下世界。灯晶石（石のツルハシ）・黒鉄鉱（鉄）・紅炎石（ダイヤ、深い所）・虚晶石（黒鉄、遺跡の近く）が採れる。全身そろえると 紅炎=爆発ダメージ半分＋殴った相手が燃える、虚晶=落下ダメージなし＋敵に気づかれにくい。',
   '地底への門: 一番下の岩盤を爆薬で吹き飛ばすと、時々岩盤ブロックが手に入る。それを地面に 5×5 の輪（真ん中 3×3 は空ける。四隅は無くてよい）に並べ、真ん中で爆薬を爆発させると門が開く。門の上に少し立つと移動する。',
@@ -2559,7 +2654,7 @@ const NET = {
   },
   dim(m) {
     enterDim(m, pendingPos); pendingPos = null;
-    if (gateFrom) { arriveGate(gateFrom.x, gateFrom.z); gateFrom = null; }   // 門をくぐって来た
+    if (gateFrom) { arriveGate(gateFrom.x, gateFrom.z, gateFrom.kind); gateFrom = null; }   // 門をくぐって来た
     toast(DIMS[dim].name + ' に来た');
   },
   pdim(m) { const o = others.get(m.id); if (o) { o.dim = m.dim; o.ty = o.y = -100; } },   // 誰かが世界を移った（次の位置報告が来るまで隠す）
@@ -2592,7 +2687,7 @@ const NET = {
       mb.tx = x; mb.ty = y; mb.tz = z; mb.tyaw = yaw; mb.fuse = fz || 0;
     }
   },
-  boom(m) { boomFx(m.x, m.y, m.z, m.r); if (!m.fake) hurtByBoom(m.x, m.y, m.z, m.r); },   // fake: 門が開く時の見た目だけの爆発
+  boom(m) { boomFx(m.x, m.y, m.z, m.r); if (!m.fake) hurtByBoom(m.x, m.y, m.z, m.r, m.pw || 1); },   // fake: 門が開く時の見た目だけの爆発
   fuse(m) { fuses.push({ x: m.x, y: m.y, z: m.z, t: m.s, mine: false }); },
   mrm(m) { mobs.delete(m.id); },
   mown(m) { const mb = mobs.get(m.id); if (mb) { mb.owner = m.owner; mb.vy = 0; mb.dir = mb.yaw; } },
@@ -2600,8 +2695,10 @@ const NET = {
     const mb = mobs.get(m.id);
     if (!mb) return;
     mb.hurt = 0.3;
+    if (typeof m.hp === 'number') mb.hp = m.hp;
     if (mb.owner === myId) {   // 動かしている本人が吹き飛びと逃げを反映
-      mb.kbx = m.kx; mb.kbz = m.kz; if (mb.ground) mb.vy = 5;
+      const hv = MOBS[mb.kind].boss ? 0.1 : 1;   // おかかっぱは重いのでほとんど飛ばない
+      mb.kbx = m.kx * hv; mb.kbz = m.kz * hv; if (mb.ground && hv === 1) mb.vy = 5;
       if (!MOBS[mb.kind].hostile) { mb.flee = 4; mb.dir = Math.atan2(-m.kx, -m.kz); }
       if (MOBS[mb.kind].blink) { mb.angry = true; mb.blinkT = 1; blinkMob(mb, mb.x, mb.y, mb.z, 5, 9); }   // カスミ: 殴られると怒って、いったん遠くへ飛ぶ
     }
@@ -2722,7 +2819,7 @@ function netTick(dt) {
   posT += dt;
   if (posT >= 0.1) {
     posT = 0;
-    const m = { t: 'pos', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(2), pitch: +P.pitch.toFixed(2), sn: P.sneak ? 1 : 0, eq: eqCode() };
+    const m = { t: 'pos', x: +P.x.toFixed(2), y: +P.y.toFixed(2), z: +P.z.toFixed(2), yaw: +P.yaw.toFixed(2), pitch: +P.pitch.toFixed(2), sn: P.sneak ? 1 : 0, eq: eqCode(), h: slots[sel] ? slots[sel].b : 0 };
     const s = JSON.stringify(m);
     if (s !== lastPos) { lastPos = s; send(m); }
     const l = [];
@@ -2811,6 +2908,8 @@ const MOBS = {
   cow:     { w: 0.45, h: 1.3, speed: 1.4 },
   chicken: { w: 0.22, h: 0.7, speed: 1.5 },
   sheep:   { w: 0.42, h: 1.1, speed: 1.5 },
+  // 遺跡のボス。歩いて追ってきて、近いと殴り、離れると岩を投げる。重いのでほとんど吹き飛ばない
+  okakappa: { w: 0.95, h: 3.5, speed: 2.1, hostile: true, atk: 6, name: 'おかかっぱ', boss: true, maxHp: 150 },
 };
 const mobs = new Map();
 function addMob(m) {
@@ -2845,7 +2944,23 @@ function simMob(m, dt) {
   }
   if (tgt) {
     m.dir = Math.atan2(-(tgt[1] - m.x), -(tgt[3] - m.z));
-    if (K.ranged) {   // 骨の射手: 近づきすぎず離れすぎずの距離を保って、2秒ちょっとごとに矢を撃つ
+    if (K.boss) {   // おかかっぱ: 近いと殴る。離れていると、溜めてから岩を投げる（体力が半分を切ると投げる間隔が短くなる）
+      const dist = Math.sqrt(best);
+      m.throwCd = (m.throwCd === undefined ? 3 : m.throwCd) - dt;
+      if (m.wind > 0) {   // 岩を頭の上に持ち上げている（0.9秒）
+        sp = 0; m.wind += dt; m.fuse = Math.min(1, m.wind / 0.9);
+        if (m.wind >= 0.9) { m.wind = 0; m.fuse = 0; bossThrow(m, tgt); }
+      } else if (dist > 4.5 && dist < 30 && m.throwCd <= 0) {
+        m.wind = 0.001; m.throwCd = m.hp < (K.maxHp / 2) ? 2.5 + Math.random() : 4 + Math.random();
+      } else {
+        sp = best < 2.2 * 2.2 ? 0 : K.speed;
+        if (best < 2.9 * 2.9 && m.atkCd <= 0) {
+          m.atkCd = 1.5;
+          if (tgt[0] === myId) { const l = Math.hypot(P.x - m.x, P.z - m.z) || 1; hurtMe(K.atk, (P.x - m.x) / l * 7, (P.z - m.z) / l * 7, K.name); }
+          else send({ t: 'mattack', id: m.id, target: tgt[0] });
+        }
+      }
+    } else if (K.ranged) {   // 骨の射手: 近づきすぎず離れすぎずの距離を保って、2秒ちょっとごとに矢を撃つ
       const dist = Math.sqrt(best);
       sp = dist > 12 ? K.speed : dist < 6 ? -K.speed * 0.8 : 0;
       if (dist < 18 && m.atkCd <= 0) { m.atkCd = 2.2; mobShoot(m, tgt); }
@@ -2882,7 +2997,34 @@ function simMob(m, dt) {
   for (let i = 0; i < steps; i++) wall = mobMove(m, K, vx * h, m.vy * h, vz * h) || wall;
   if (wall && m.ground && sp !== 0) m.vy = 8;   // 段差はジャンプで登る
 }
+// おかかっぱの岩: 投げた瞬間の相手の位置へまっすぐ飛ぶ（追いかけない）。何かに当たると爆発する（ブロックは壊さない）
+function bossThrow(m, tgt) {
+  const sx = m.x, sy = m.y + 3.6, sz = m.z, dx = tgt[1] - sx, dy = tgt[2] + 1 - sy, dz = tgt[3] - sz, l = Math.hypot(dx, dy, dz) || 1, v = 13;
+  launchArrow(sx, sy, sz, dx / l * v, dy / l * v, dz / l * v, 0, m.id, 2);
+}
+function rockBoom(x, y, z) {   // 岩・紅炎の矢の爆発: ダメージだけで、ブロックは壊さない
+  boomFx(x, y, z, 2.5); hurtByBoom(x, y, z, 2.5, 0.5);
+  send({ t: 'boom', x, y, z, r: 2.5, pw: 0.5, nb: 1 });
+}
+// ボスの体力バー: 40ブロック以内におかかっぱがいれば、画面の上に名前と体力を出す
+let bossBar = null;
+function updateBossBar() {
+  let bm = null;
+  for (const m of mobs.values()) if (MOBS[m.kind] && MOBS[m.kind].boss && Math.hypot(m.x - P.x, m.z - P.z) < 40) bm = m;
+  if (!bossBar) {
+    bossBar = document.createElement('div');
+    bossBar.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);width:360px;text-align:center;color:#fff;font:bold 14px sans-serif;text-shadow:0 1px 2px #000;pointer-events:none;display:none;z-index:5';
+    bossBar.innerHTML = '<div></div><div style="height:10px;background:#331;border:2px solid #000;margin-top:4px"><div style="height:100%;background:#c33;width:100%"></div></div>';
+    document.body.appendChild(bossBar);
+  }
+  if (!bm) { bossBar.style.display = 'none'; return; }
+  const K = MOBS[bm.kind], hp = Math.max(0, bm.hp === undefined ? K.maxHp : bm.hp);
+  bossBar.style.display = 'block';
+  bossBar.firstChild.textContent = K.name;
+  bossBar.lastChild.firstChild.style.width = (100 * hp / K.maxHp).toFixed(1) + '%';
+}
 function updateMobs(dt) {
+  updateBossBar();
   const k = Math.min(1, dt * 10);
   for (const m of mobs.values()) {
     const px = m.x, pz = m.z;
@@ -2940,13 +3082,13 @@ function attack() {
     if (t !== null && t < maxT) { maxT = t; hit = id; isMob = true; }
   }
   if (hit === null) return false;
-  atkCd = 0.35;
+  atkCd = heldTool() && heldTool().slow ? 0.8 : 0.35;   // 紅炎の大剣は振りが遅い
   if (isMob && slots[sel] && slots[sel].b === SHEARS) {   // ハサミを持って羊を左クリック: 倒さずに毛を刈る
     const mb = mobs.get(hit);
     if (mb.kind === 'sheep') { if (!mb.sheared) { mb.sheared = true; send({ t: 'shear', id: hit }); useTool(); } return true; }
   }
   const tool = heldTool(), dmg = tool ? tool.dmg : 1, l = Math.hypot(d[0], d[2]) || 1;
-  send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6, burn: fullSet(6) ? 1 : 0 });   // 紅炎の全身: 殴った相手が燃える
+  send({ t: isMob ? 'mhit' : 'hit', id: hit, dmg, kx: d[0] / l * 6, kz: d[2] / l * 6, burn: fullSet(6) || (tool && tool.burn) ? 1 : 0 });   // 紅炎の全身・紅炎の大剣: 殴った相手が燃える
   if (tool) useTool();
   return true;
 }
@@ -2959,6 +3101,10 @@ function hurtMe(dmg, kx, kz, cause) {
     dmg = Math.ceil(dmg / 2); kx *= 0.4; kz *= 0.4;
     if (--slots[sh].d <= 0) slots[sh] = null;
     refreshUI();
+  }
+  if (slots[37] && slots[37].b === VOID_CLOAK && Math.random() < 0.2) {   // 虚無の外套: 2割で攻撃をすり抜ける
+    for (let k = 0; k < 8; k++) parts.push({ x: P.x, y: P.y + 1, z: P.z, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: (Math.random() - 0.5) * 3, life: 0.5, col: [0.72, 0.5, 0.98] });
+    P.inv = 0.3; return;
   }
   dmg = armorReduce(dmg);
   P.inv = 0.3; P.kbx = kx; P.kbz = kz;   // 無敵時間は攻撃の間隔（0.35秒）より短く。長いと連打の半分が消える
@@ -2978,10 +3124,27 @@ const QUAD = {   // 胴[幅,高さ,長さ] 脚の高さ 頭[幅,高さ,長さ] �
 function drawMobs() {
   let o = 0, boxes = 0;
   for (const m of mobs.values()) {
-    if (boxes + 9 > MAXCUBE) break;
+    if (boxes + 15 > MAXCUBE) break;
     const red = m.hurt > 0, sw = Math.sin(m.phase) * 0.7 * Math.min(1, m.speed / 1.5);
     const B = (pv, sz, off, rx, ct, cs) => { o = pushBox(o, m.x, m.y, m.z, m.yaw, pv, sz, off, rx, tintRed(ct, red), tintRed(cs, red)); boxes++; };
-    if (m.kind === 'boomer') {   // タルボム: 鉄の帯を巻いた樽に足と導火線。火がつくと白く点滅してふくらむ
+    if (m.kind === 'okakappa') {   // おかかっぱ: 石の肌の大きな河童。おかっぱ頭に皿、背中に甲羅、くちばし。岩を投げる時は両腕で頭上に持ち上げる
+      const SK = [0.42, 0.52, 0.38], SKD = [0.32, 0.40, 0.30], SHL = [0.46, 0.33, 0.20], HR = [0.10, 0.16, 0.10], DSH = [0.86, 0.86, 0.80], BK = [0.86, 0.70, 0.26], EY = [1.0, 0.72, 0.22];
+      const wd = m.fuse || 0, armUp = wd > 0 ? -2.9 * Math.min(1, wd * 2) : 0, s2 = sw * 0.6;
+      B([-0.45, 1.2, 0], [0.55, 1.2, 0.55], [0, -0.6, 0], s2, SKD, SKD);                  // 脚
+      B([0.45, 1.2, 0], [0.55, 1.2, 0.55], [0, -0.6, 0], -s2, SKD, SKD);
+      B([0, 1.2, 0], [1.8, 1.4, 1.1], [0, 0.7, 0], 0, SK, SK);                            // 胴
+      B([0, 1.2, 0], [1.6, 1.3, 0.35], [0, 0.72, 0.7], 0, SHL, SHL);                     // 甲羅
+      B([-1.15, 2.5, 0], [0.45, 1.5, 0.45], [0, -0.7, 0], armUp || (wd ? 0 : -s2 * 0.8), SK, SKD);   // 腕
+      B([1.15, 2.5, 0], [0.45, 1.5, 0.45], [0, -0.7, 0], armUp || (wd ? 0 : s2 * 0.8), SK, SKD);
+      B([0, 2.6, 0], [1.1, 0.9, 1.0], [0, 0.45, 0], 0, SK, SK);                           // 頭
+      B([0, 2.6, 0], [1.2, 0.75, 1.1], [0, 0.62, 0.06], 0, HR, HR);                       // おかっぱ（横と後ろはあごの高さまで）
+      B([0, 2.6, 0], [1.14, 0.22, 0.1], [0, 0.86, -0.53], 0, HR, HR);                     // 前髪
+      B([0, 2.6, 0], [0.7, 0.08, 0.7], [0, 1.03, 0], 0, DSH, DSH);                         // 皿
+      B([0, 2.6, 0], [0.5, 0.22, 0.3], [0, 0.25, -0.62], 0, BK, BK);                       // くちばし
+      B([0, 2.6, 0], [0.16, 0.14, 0.02], [-0.25, 0.5, -0.51], 0, EY, EY);                  // 光る目
+      B([0, 2.6, 0], [0.16, 0.14, 0.02], [0.25, 0.5, -0.51], 0, EY, EY);
+      if (wd > 0) B([0, 3.6 + wd * 0.3, 0], [0.8, 0.8, 0.8], [0, 0, 0], fxT * 2, [0.46, 0.44, 0.42], [0.34, 0.32, 0.30]);   // 持ち上げた岩
+    } else if (m.kind === 'boomer') {   // タルボム: 鉄の帯を巻いた樽に足と導火線。火がつくと白く点滅してふくらむ
       const fz = m.fuse || 0, sc = 1 + 0.25 * fz / 1.5, wh = fz > 0 && Math.sin(fxT * 22) > 0;
       const C = c => wh ? WHITE : c, S = v => v.map(n => n * sc);
       const WD = [0.52, 0.34, 0.17], BAND = [0.20, 0.20, 0.22], LEG = [0.28, 0.20, 0.12], EYE = [1.0, 0.9, 0.3];
@@ -3070,7 +3233,11 @@ function pickSpawn(kind) {
 // 矢は「撃った側のブラウザ」が飛ばして当たり判定をする（プレイヤーの矢は本人、骨の射手の矢はそのモブを動かしている人）。
 // 他の人の画面には、発射の合図だけ届けて見た目だけ同じように飛ばす。
 const arrows = [];   // { x,y,z, vx,vy,vz, dmg, mob(撃ったモブID・0ならプレイヤー), mine(自分が当たり判定をする), age, stuck(刺さって残る秒数) }
-function launchArrow(x, y, z, vx, vy, vz, dmg, mob, kind) {   // kind: 0=矢, 1=ワープ玉
+function arrowBoom(x, y, z) {   // 紅炎の矢の爆発（小さめ、ブロックは壊さない）
+  boomFx(x, y, z, 1.5); hurtByBoom(x, y, z, 2, 0.4);
+  send({ t: 'boom', x, y, z, r: 2, pw: 0.4 });
+}
+function launchArrow(x, y, z, vx, vy, vz, dmg, mob, kind) {   // kind: 0=矢, 1=ワープ玉, 2=おかかっぱの岩, 3=紅炎の矢, 4=虚晶の杖の弾
   arrows.push({ x, y, z, vx, vy, vz, dmg, mob: mob || 0, kind: kind || 0, mine: true, age: 0, stuck: 0 });
   send({ t: 'shoot', x, y, z, vx, vy, vz, k: kind || 0 });
 }
@@ -3080,7 +3247,7 @@ function fireBow(c) {   // c: 引きの強さ 0〜1
   if (i === undefined) { toast('矢が無い'); return; }
   if (--slots[i].n <= 0) slots[i] = null;
   const d = lookDir(), v = 14 + 22 * c;
-  launchArrow(P.x + d[0] * 0.4, eyeY() - 0.1 + d[1] * 0.4, P.z + d[2] * 0.4, d[0] * v, d[1] * v, d[2] * v, Math.round(2 + 6 * c), 0);
+  launchArrow(P.x + d[0] * 0.4, eyeY() - 0.1 + d[1] * 0.4, P.z + d[2] * 0.4, d[0] * v, d[1] * v, d[2] * v, Math.round(2 + 6 * c), 0, slots[sel] && slots[sel].b === EMBER_BOW ? 3 : 0);
   useTool();
   refreshUI();
 }
@@ -3100,10 +3267,15 @@ function updateArrows(dt) {
     const steps = Math.max(1, Math.ceil(Math.hypot(a.vx, a.vy, a.vz) * dt / 0.3)), h = dt / steps;
     let gone = false;
     for (let s = 0; s < steps && !gone; s++) {
-      a.vy -= 20 * h;
+      if (a.kind !== 2 && a.kind !== 4) a.vy -= 20 * h;   // 岩と杖の弾はまっすぐ飛ぶ
       const nx = a.x + a.vx * h, ny = a.y + a.vy * h, nz = a.z + a.vz * h;
       if (solid(getBlock(Math.floor(nx), Math.floor(ny), Math.floor(nz)))) {   // ブロックに刺さる
         if (a.kind === 1) { if (a.mine) warpTo(a.x, a.y, a.z); gone = true; break; }   // ワープ玉: 落ちた場所へ移動
+        if (a.kind === 2 || a.kind === 3) {   // 岩・紅炎の矢: その場で爆発
+          if (a.mine) { if (a.kind === 2) rockBoom(a.x, a.y, a.z); else arrowBoom(a.x, a.y, a.z); }
+          gone = true; break;
+        }
+        if (a.kind === 4) { gone = true; break; }   // 杖の弾は消える
         a.stuck = 3;
         if (a.mine && !a.mob && Math.random() < 0.7) send({ t: 'drop', b: ARROW, n: 1, x: a.x, y: a.y, z: a.z, vx: 0, vy: 0, vz: 0 });   // 7割は拾い直せる
         break;
@@ -3112,6 +3284,12 @@ function updateArrows(dt) {
         const L = Math.hypot(nx - a.x, ny - a.y, nz - a.z) || 1e-6, o = [a.x, a.y, a.z], d = [(nx - a.x) / L, (ny - a.y) / L, (nz - a.z) / L];
         const hl = Math.hypot(d[0], d[2]) || 1, kx = d[0] / hl * 4, kz = d[2] / hl * 4;
         const hitBox = (x, y, z, w, hh) => { const t = rayBox(o, d, x - w, y, z - w, x + w, y + hh, z + w); return t !== null && t <= L; };
+        if (a.kind === 2) {   // 岩: 誰かの体に当たったら爆発
+          let hit = hitBox(P.x, P.y, P.z, 0.35, 1.8);
+          for (const p of others.values()) if (!hit && p.ty > -50 && hitBox(p.x, p.y, p.z, 0.35, 1.8)) hit = true;
+          if (hit) { rockBoom(a.x, a.y, a.z); gone = true; break; }
+          a.x = nx; a.y = ny; a.z = nz; continue;
+        }
         if (a.mob && hitBox(P.x, P.y, P.z, 0.35, 1.8)) { hurtMe(a.dmg, kx, kz, 'スケルトン'); gone = true; }
         if (!gone) for (const [id, p] of others) {
           if (p.ty < -50 || !hitBox(p.x, p.y, p.z, 0.35, 1.8)) continue;
@@ -3125,6 +3303,7 @@ function updateArrows(dt) {
           send({ t: 'mhit', id, dmg: a.dmg, kx, kz });
           gone = true; break;
         }
+        if (gone && a.kind === 3) arrowBoom(a.x, a.y, a.z);   // 紅炎の矢は当たった所でも爆発
       }
       a.x = nx; a.y = ny; a.z = nz;
     }
@@ -3137,6 +3316,8 @@ function drawArrows() {
   for (const a of arrows) {
     if (boxes + 2 > MAXCUBE) break;
     if (a.kind === 1) { o = pushBox(o, a.x, a.y, a.z, fxT * 6, [0, 0, 0], [0.2, 0.2, 0.2], [0, 0, 0], fxT * 4, [0.3, 0.85, 0.82], [0.15, 0.6, 0.66]); boxes++; continue; }
+    if (a.kind === 2) { o = pushBox(o, a.x, a.y, a.z, a.age * 5, [0, 0, 0], [0.8, 0.8, 0.8], [0, 0, 0], a.age * 3, [0.46, 0.44, 0.42], [0.34, 0.32, 0.30]); boxes++; continue; }   // 岩
+    if (a.kind === 4) { o = pushBox(o, a.x, a.y, a.z, fxT * 8, [0, 0, 0], [0.18, 0.18, 0.18], [0, 0, 0], fxT * 6, [0.92, 0.82, 1.0], [0.66, 0.42, 0.96]); boxes++; continue; }   // 杖の弾
     const yaw = Math.atan2(-a.vx, -a.vz), pitch = Math.atan2(a.vy, Math.hypot(a.vx, a.vz));
     o = pushBox(o, a.x, a.y, a.z, yaw, [0, 0, 0], [0.05, 0.05, 0.7], [0, 0, 0.3], pitch, ARROW_C, ARROW_C);      // 軸（先端が今の位置）
     o = pushBox(o, a.x, a.y, a.z, yaw, [0, 0, 0], [0.09, 0.09, 0.1], [0, 0, 0], pitch, ARROW_T, ARROW_T);        // 矢じり
@@ -3170,24 +3351,37 @@ function tryOpenGate(x, y, z) {   // (x,y,z) = 爆薬があった場所。門を
   toast('門が開いた');
   return true;
 }
+// 門は2種類: PORTAL=地上⇔地底、VOID_PORTAL=地底⇔虚空
 let gateT = 0, gateLock = false, gateFrom = null;
 function updateGate(dt) {
-  const f = Math.floor, on = started && getBlock(f(P.x), f(P.y - 0.05), f(P.z)) === PORTAL;   // 門の上に立っている
-  if (!on) { gateT = 0; gateLock = false; return; }   // 門から降りたら、次にまた乗れる
-  if (gateLock || dim === 2) return;
+  const f = Math.floor, g = started ? getBlock(f(P.x), f(P.y - 0.05), f(P.z)) : AIR;   // 足元が門か
+  const to = g === PORTAL ? (dim === 0 ? 1 : dim === 1 ? 0 : -1) : g === VOID_PORTAL ? (dim === 1 ? 2 : dim === 2 ? 1 : -1) : -1;
+  if (to < 0) { gateT = 0; gateLock = false; return; }   // 門から降りたら、次にまた乗れる
+  if (gateLock) return;
   gateT += dt;
   if (gateT < 1.2) return;
   gateT = 0; gateLock = true;
-  gateFrom = { x: f(P.x), z: f(P.z) };
+  gateFrom = { x: f(P.x), z: f(P.z), kind: g };
   if (dim === 0) P.back = { x: P.x, y: P.y, z: P.z };
-  send({ t: 'dim', d: dim === 0 ? 1 : 0 });
+  send({ t: 'dim', d: to });
 }
-// 門をくぐって着いた時: 近くに門があればそこに立つ。無ければ（地底なら）帰りの門を作る
-function arriveGate(x, z) {
+// 門をくぐって着いた時: 近くに同じ種類の門があればそこに立つ。無ければ帰りの門を作る
+function arriveGate(x, z, kind = PORTAL) {
   gateLock = true;
   for (let r = 0; r <= 6; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
-    for (let y = 1; y < H - 1; y++) if (getBlock(x + dx, y, z + dz) === PORTAL) { P.x = x + dx + 0.5; P.y = y + 1; P.z = z + dz + 0.5; P.vy = 0; return; }
+    for (let y = 1; y < H - 1; y++) if (getBlock(x + dx, y, z + dz) === kind) { P.x = x + dx + 0.5; P.y = y + 1; P.z = z + dz + 0.5; P.vy = 0; return; }
+  }
+  if (dim === 2) {   // 虚空: 何も無い所に着くので、足場（7x7）と帰りの門を作る
+    const gy = 30, l = [];
+    for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
+      const bx = x + dx, bz = z + dz, mid = Math.abs(dx) <= 1 && Math.abs(dz) <= 1;
+      l.push([bx, gy, bz, mid ? VOID_PORTAL : Math.max(Math.abs(dx), Math.abs(dz)) === 3 ? RUIN_BRICK : SANDSTONE, getBlock(bx, gy, bz)]);
+      for (let dy = 1; dy <= 3; dy++) { const b = getBlock(bx, gy + dy, bz); if (b !== AIR) l.push([bx, gy + dy, bz, AIR, b]); }
+    }
+    netSets(l);
+    P.x = x + 0.5; P.y = gy + 1; P.z = z + 0.5; P.vy = 0;
+    return;
   }
   if (dim === 0) {   // 地上に門が残っていない: その場所の地表に出る
     let y = H - 1;
@@ -3202,7 +3396,7 @@ function arriveGate(x, z) {
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
     const bx = x + dx, bz = z + dz, ring = Math.max(Math.abs(dx), Math.abs(dz)) === 2;
     if (!solid(getBlock(bx, gy - 1, bz))) l.push([bx, gy - 1, bz, STONE, getBlock(bx, gy - 1, bz)]);
-    l.push([bx, gy, bz, ring ? BEDROCK : PORTAL, getBlock(bx, gy, bz)]);
+    l.push([bx, gy, bz, ring ? BEDROCK : kind, getBlock(bx, gy, bz)]);
     for (let dy = 1; dy <= 3; dy++) { const b = getBlock(bx, gy + dy, bz); if (b !== AIR && gy + dy < H - 2) l.push([bx, gy + dy, bz, AIR, b]); }
   }
   netSets(l);
@@ -3223,18 +3417,18 @@ function boomFx(x, y, z, r) {
     parts.push({ x, y, z, vx: Math.cos(a) * h * s, vy: u * s + 2, vz: Math.sin(a) * h * s, life: 0.4 + Math.random() * 0.5, col: cols[i % 4] });
   }
 }
-function hurtByBoom(x, y, z, r) {
+function hurtByBoom(x, y, z, r, pw = 1) {   // pw: 強さの倍率（おかかっぱの岩は0.5）
   const dx = P.x - x, dy = P.y + 0.9 - y, dz = P.z - z, d = Math.hypot(dx, dy, dz), R = r * 1.8;
   if (d >= R) return;
   const l = Math.hypot(dx, dz) || 1, k = 9 * (1 - d / R);
-  hurtMe(Math.ceil(16 * (1 - d / R) / (fullSet(6) ? 2 : 1)), dx / l * k, dz / l * k, '爆発');   // 紅炎の全身: 爆発ダメージ半分
+  hurtMe(Math.ceil(16 * pw * (1 - d / R) / (fullSet(6) ? 2 : 1)), dx / l * k, dz / l * k, '爆発');   // 紅炎の全身: 爆発ダメージ半分
 }
 function explode(x, y, z, r, mobId) {
   const l = [], seen = new Set(), chain = [], f = Math.floor;
   for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     if (Math.hypot(dx, dy, dz) > r - Math.random() * 0.8) continue;   // ふちは少しガタつかせる
     const bx = f(x) + dx, by = f(y) + dy, bz = f(z) + dz, b = getBlock(bx, by, bz);
-    if (by < 1 || by >= H || b === AIR || b === WATER || b === CORE) continue;
+    if (by < 1 || by >= H || b === AIR || b === WATER || b === CORE || b === VOID_PORTAL) continue;
     if (b === BEDROCK) {   // 岩盤: 6% で割れて、岩盤ブロックを落とす（それ以外はびくともしない）
       if (Math.random() < 0.06) netSet(bx, by, bz, AIR, BEDROCK, [BEDROCK]);
       continue;

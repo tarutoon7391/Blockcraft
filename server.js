@@ -18,14 +18,14 @@ const WATER = 5, BEDROCK = 9;
 const WHEAT0 = 25, WHEAT3 = 28;
 const FAST = !!process.env.FAST;   // テスト用: モブの湧きと作物の成長を速くする
 const TORCH = 29;          // 29=床の松明、30〜33=壁の松明（向き違い）。アイテムとしては 29 だけ
-const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 76;   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
+const WOOL = 34, SAPLING = 44, CHEST = 45, CAKE0 = 46, BOMB = 58, CORE = 59, MAX_BLOCK = 77;   // 77=虚空の門   // 59=深層岩（置けない・壊せない） 60=門   // 45=チェスト 46〜49=ケーキ 50〜57=にんじん・じゃがいもの成長段階   // 34〜44: 羊毛・ベッド・鉱石ブロック・石レンガ・ガラス・粘土・レンガ・苗木
 const ITEM_IDS = new Set([100, 101, 102, 103, 104, 105, 106, 107, 108, 120, 121, 122, 123, 124, 125, 126, TORCH]);
 for (let tier = 0; tier < 8; tier++) for (let type = 0; type < 5; type++) ITEM_IDS.add(200 + tier * 10 + type);   // ツール
 for (let b = 34; b <= CAKE0; b++) ITEM_IDS.add(b);
 ITEM_IDS.add(BOMB);   // 爆薬
 ITEM_IDS.add(BEDROCK);
 for (let b = 61; b <= MAX_BLOCK; b++) ITEM_IDS.add(b);   // 地底のブロック
-for (let i = 150; i <= 153; i++) ITEM_IDS.add(i);        // 灯晶・黒鉄インゴット・紅炎・虚晶
+for (let i = 150; i <= 160; i++) ITEM_IDS.add(i);   // 154=おかかっぱの核 155〜160=特別装備        // 灯晶・黒鉄インゴット・紅炎・虚晶
 for (let i = 130; i <= 149; i++) ITEM_IDS.add(i);                                                               // 時計・ハサミ・バケツ・リンゴ・盾・卵・にんじん・じゃがいも・糸・羽・骨・骨粉・矢・弓
 for (let tier = 2; tier < 8; tier++) for (let part = 0; part < 4; part++) ITEM_IDS.add(300 + tier * 10 + part);   // 防具
 const validBlock = b => Number.isInteger(b) && b >= 0 && b <= MAX_BLOCK && b !== CORE;   // 岩盤(9)は爆破で手に入れて置ける   // 水(5)はバケツで置ける
@@ -40,6 +40,11 @@ function hash2(x, z, s, sd) {
   h = Math.imul(h ^ (h >>> 15), 2246822519);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+function ruinCenter(x, z) {   // 地底のこの場所が属する遺跡の中心
+  const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
+  return { x: i * RUIN_CELL + 64 + Math.floor(hash2(i, j, 860, sd) * 192), z: j * RUIN_CELL + 64 + Math.floor(hash2(i, j, 861, sd) * 192) };
+}
+const cleared = new Set();   // おかかっぱを倒した遺跡（"x,z"）。もう出てこない
 function isRuinChest(d, x, y, z) {
   if (d !== 1 || y !== RUIN_Y) return false;
   const sd = (seed + 7919) | 0, i = Math.floor(x / RUIN_CELL), j = Math.floor(z / RUIN_CELL);
@@ -72,6 +77,7 @@ try {
   seed = w.seed; tod = w.tod || 0.3;
   for (const k in w.edits) edits.set(k, w.edits[k]);
   for (const k in (w.chests || {})) chests.set(k, { slots: w.chests[k], user: 0 });
+  for (const k of (w.cleared || [])) cleared.add(k);
   console.log(`ワールド読み込み: seed=${seed} 変更ブロック=${edits.size}`);
 } catch (e) {
   console.log(`新しいワールドを作成: seed=${seed}`);
@@ -81,7 +87,7 @@ function save() {
   if (!dirty) return;
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits), chests: Object.fromEntries([...chests].map(([k, c]) => [k, c.slots])) }));
+    fs.writeFileSync(FILE + '.tmp', JSON.stringify({ seed, tod, edits: Object.fromEntries(edits), chests: Object.fromEntries([...chests].map(([k, c]) => [k, c.slots])), cleared: [...cleared] }));
     fs.renameSync(FILE + '.tmp', FILE);   // 書き込み途中で落ちても壊れないよう、別名で書いてから差し替える
     dirty = false;
   } catch (e) { console.error('保存失敗:', e.message); }
@@ -93,8 +99,8 @@ setInterval(save, 3000);
 setInterval(() => {
   for (const mob of mobs.values()) {
     if (!(mob.burn > 0)) continue;
-    mob.burn--; mob.hp -= 2;
-    if (mob.hp > 0) broadcast({ t: 'mhurt', id: mob.id, kx: 0, kz: 0 }); else killMob(mob, mob.burnBy);
+    mob.burn--; mob.hp -= 2; curDim = mob.dim;
+    if (mob.hp > 0) broadcast({ t: 'mhurt', id: mob.id, kx: 0, kz: 0, hp: mob.hp }); else killMob(mob, mob.burnBy);
   }
   for (const q of players.values()) {
     if (!(q.burn > 0)) continue;
@@ -142,6 +148,7 @@ const MOB_DEF = {
   cow: { hp: 10, drop: [122, 1, 2] },
   chicken: { hp: 4, drop: [124, 1, 1], extra: [142, 0, 2] },   // 肉と羽
   sheep: { hp: 8, drop: [WOOL, 1, 1] },
+  okakappa: { hp: 150, hostile: true, atk: 6, name: 'おかかっぱ', drop: [154, 1, 1], extra: [153, 1, 2], boss: true },   // 遺跡のボス: 核と虚晶
 };
 const ANIMALS = ['pig', 'cow', 'chicken', 'sheep'];
 const isNight = () => tod > 0.76 || tod < 0.24;
@@ -195,6 +202,7 @@ const growing = b => (b >= WHEAT0 && b < WHEAT3) || (b >= 50 && b <= 52) || (b >
 function killMob(mob, by) {
   mobs.delete(mob.id);
   broadcast({ t: 'mrm', id: mob.id });
+  if (mob.ruin) openVoidGate(mob);
   const def = MOB_DEF[mob.kind], [item, lo, hi] = def.drop, n = lo + Math.floor(Math.random() * (hi - lo + 1));
   const rareHit = def.rare && Math.random() < 0.15;
   if (rareHit) spawnItem({ b: def.rare[Math.floor(Math.random() * def.rare.length)], n: 1, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, by);
@@ -204,6 +212,16 @@ function killMob(mob, by) {
   }
   if (!rareHit && n > 0) spawnItem({ b: item, n, x: mob.x, y: mob.y + 0.3, z: mob.z, vx: 0, vy: 2.5, vz: 0, delay: 0.4 }, by);
   if (def.bonus && Math.random() < def.bonus[1]) spawnItem({ b: def.bonus[0], n: 1, d: def.bonus[2], x: mob.x, y: mob.y + 0.3, z: mob.z, vx: -0.8, vy: 2.5, vz: 0, delay: 0.4 }, by);
+}
+// おかかっぱを倒した: その遺跡を「倒した」にして、広間の真ん中の台（3x3）を虚空の門にする
+function openVoidGate(mob) {
+  cleared.add(mob.ruin); dirty = true;
+  const [rx, rz] = mob.ruin.split(',').map(Number), keep = curDim, l = [];
+  curDim = 1;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { edits.set(kOf(rx + dx, RUIN_Y, rz + dz), 77); l.push([rx + dx, RUIN_Y, rz + dz, 77]); }
+  bDim({ t: 'sets', l });
+  curDim = keep;
+  broadcast({ t: 'chat', name: '', text: 'おかかっぱが倒された。遺跡に虚空への門が開いた' });
 }
 // 作物・苗木の場所を覚えておく（成長させる対象）
 function track(key, b) {
@@ -344,7 +362,8 @@ const handlers = {
   pos(p, m) {
     if (![m.x, m.y, m.z, m.yaw, m.pitch].every(num)) return;
     p.x = m.x; p.y = m.y; p.z = m.z; p.yaw = m.yaw; p.pitch = m.pitch; p.sn = m.sn ? 1 : 0; p.moved = true;
-    if (typeof m.eq === 'string' && /^[0-7]{4}$/.test(m.eq)) p.eq = m.eq;   // 着ている防具（他の人に見せる用）
+    if (typeof m.eq === 'string' && /^[0-7]{4}$/.test(m.eq)) p.eq = m.eq;
+    p.held = Number.isInteger(m.h) ? m.h : 0;   // 手に持っている物（紅炎の大剣の判定用）   // 着ている防具（他の人に見せる用）
   },
   chat(p, m) {
     const text = clean(m.text, 100);
@@ -356,15 +375,15 @@ const handlers = {
     const q = players.get(m.id);
     if (!q || q === p || q.dim !== p.dim || !num(m.dmg) || dist2(p, q) > (m.ranged ? 60 * 60 : 36)) return;   // ranged: 矢
     sendTo(q.ws, { t: 'hurt', dmg: Math.max(1, Math.min(12, Math.floor(m.dmg))), kx: clampK(m.kx), kz: clampK(m.kz), cause: p.name });
-    if (m.burn && p.eq === '6666' && !m.ranged) { q.burn = 3; q.burnBy = p.name; }   // 紅炎の全身で殴られた: 3秒燃える
+    if (m.burn && (p.eq === '6666' || p.held === 155) && !m.ranged) { q.burn = 3; q.burnBy = p.name; }   // 紅炎の全身で殴られた: 3秒燃える
   },
   // モブを殴った → 体力はサーバーが持つ
   mhit(p, m) {
     const mob = mobs.get(m.id);
     if (!mob || mob.dim !== p.dim || !num(m.dmg)) return;
     mob.hp -= Math.max(1, Math.min(12, Math.floor(m.dmg)));
-    if (m.burn && p.eq === '6666') { mob.burn = 3; mob.burnBy = p.id; }
-    if (mob.hp > 0) { broadcast({ t: 'mhurt', id: mob.id, kx: clampK(m.kx), kz: clampK(m.kz) }); return; }
+    if (m.burn && (p.eq === '6666' || p.held === 155)) { mob.burn = 3; mob.burnBy = p.id; }   // 紅炎の全身か紅炎の大剣
+    if (mob.hp > 0) { broadcast({ t: 'mhurt', id: mob.id, kx: clampK(m.kx), kz: clampK(m.kz), hp: mob.hp }); return; }
     killMob(mob, p.id);
   },
   // ゾンビが誰かを殴った（ゾンビを動かしているブラウザからの報告）
@@ -378,23 +397,24 @@ const handlers = {
   // 矢を撃った（他の人の画面にも同じ矢を飛ばすための合図。当たり判定は撃った側がやる）
   shoot(p, m) {
     if (![m.x, m.y, m.z, m.vx, m.vy, m.vz].every(num) || dist2(p, m) > 40 * 40) return;
-    bDim({ t: 'arrow', x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, k: m.k === 1 ? 1 : 0 }, p.ws);
+    bDim({ t: 'arrow', x: m.x, y: m.y, z: m.z, vx: m.vx, vy: m.vy, vz: m.vz, k: [1, 2, 3, 4].includes(m.k) ? m.k : 0 }, p.ws);
   },
   // 爆発した（タルボム・爆薬）。壊すブロックは sets で別に届く。ここでは合図を配って、巻き込まれたモブにダメージを与える。
   // プレイヤーへのダメージは、合図を受けた各自のブラウザが自分との距離で計算する
   boom(p, m) {
     if (![m.x, m.y, m.z, m.r].every(num) || m.r < 1 || m.r > 5 || dist2(p, m) > 64 * 64) return;
-    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, fake: m.fake ? 1 : 0 }, p.ws);
-    if (m.fake) return;   // 門が開く時の見た目だけの爆発: モブにもダメージなし
+    const pw = num(m.pw) ? Math.max(0.2, Math.min(1, m.pw)) : 1;   // 強さの倍率（おかかっぱの岩・紅炎の矢は弱め）
+    bDim({ t: 'boom', x: m.x, y: m.y, z: m.z, r: m.r, fake: m.fake ? 1 : 0, pw }, p.ws);
+    if (m.fake || m.nb) return;   // nb: モブには当たらない（おかかっぱの岩）   // 門が開く時の見た目だけの爆発: モブにもダメージなし
     const self = mobs.get(m.mob);
     if (self && self.owner === p.id && self.kind === 'boomer') { mobs.delete(self.id); broadcast({ t: 'mrm', id: self.id }); }   // 自爆したタルボム（何も落とさない）
     const R = m.r * 1.8;
     for (const mob of [...mobs.values()]) {
       const d = Math.hypot(mob.x - m.x, mob.y - m.y, mob.z - m.z);
       if (d >= R || mob.dim !== p.dim) continue;
-      mob.hp -= Math.ceil(24 * (1 - d / R));
+      mob.hp -= Math.min(MOB_DEF[mob.kind].boss ? 10 : 99, Math.ceil(24 * pw * (1 - d / R)));   // ボスは爆発1回で最大10まで
       if (mob.hp <= 0) killMob(mob, p.id);
-      else broadcast({ t: 'mhurt', id: mob.id, kx: clampK((mob.x - m.x) / (d || 1) * 6), kz: clampK((mob.z - m.z) / (d || 1) * 6) });
+      else broadcast({ t: 'mhurt', id: mob.id, kx: clampK((mob.x - m.x) / (d || 1) * 6), kz: clampK((mob.z - m.z) / (d || 1) * 6), hp: mob.hp });
     }
   },
   // 爆薬に火がついた（他の人の画面にも点滅する爆薬を見せる）
@@ -542,9 +562,19 @@ setInterval(() => {
     const owner = players.get(m.owner);
     if (!owner || owner.dim !== m.dim || dist2(m, owner) > nd + 24 * 24) { m.owner = near.id; broadcast({ t: 'mown', id: m.id, owner: near.id }); }   // 一番近い人が動かす
   }
+  // 地底: 遺跡の大広間に近づいた人がいて、まだ倒していなければ、おかかっぱを台の上に出す
+  for (const p of all) {
+    if (p.dim !== 1) continue;
+    const c = ruinCenter(Math.floor(p.x), Math.floor(p.z)), key = c.x + ',' + c.z;
+    if (cleared.has(key) || (p.x - c.x - 0.5) ** 2 + (p.z - c.z - 0.5) ** 2 > 22 * 22 || Math.abs(p.y - RUIN_Y) > 10) continue;
+    if ([...mobs.values()].some(m => m.ruin === key)) continue;
+    const mob = { id: nextMob++, kind: 'okakappa', x: c.x + 0.5, y: RUIN_Y + 1, z: c.z + 0.5, yaw: 0, hp: MOB_DEF.okakappa.hp, owner: p.id, dim: 1, ruin: key };
+    mobs.set(mob.id, mob);
+    curDim = 1; bDim({ t: 'mob', m: mob });
+  }
   if (mobs.size >= 80) return;
   for (const p of all) {
-    if (p.dim !== 0) continue;   // 別世界のモブはまだ無い
+    if (p.dim !== 0) continue;   // 別世界の普通のモブはまだ無い
     let z = 0, a = 0;
     for (const m of mobs.values()) if (m.dim === 0 && dist2(m, p) < 64 * 64) { if (MOB_DEF[m.kind].hostile) z++; else a++; }
     if (night && z < 5) { const r = Math.random(); sendTo(p.ws, { t: 'wantspawn', kind: r < 0.4 ? 'zombie' : r < 0.6 ? 'spider' : r < 0.8 ? 'skeleton' : r < 0.92 ? 'boomer' : 'wisp' }); }   // ゾンビ4割・クモ2割・スケルトン2割・タルボム1.2割・カスミ0.8割
